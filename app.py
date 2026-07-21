@@ -240,27 +240,25 @@ if st.session_state.data_loaded and \
         st.header("📈 Отчет по движению денежных средств")
         
         # ============================================
-        # РАСЧЕТ ДЛЯ НОВЫХ БЛОКОВ
+        # РАСЧЕТ "Из них на депозите" на конец периода
         # ============================================
         
-        # Получаем все депозитные операции
         deposit_ops_all = st.session_state.ip_operations.attrs.get("deposits", pd.DataFrame()) if st.session_state.ip_operations is not None else pd.DataFrame()
         
         if not deposit_ops_all.empty:
             deposit_report_full = DepositReportGenerator.generate_report(deposit_ops_all)
             if not deposit_report_full.empty:
-                start_ts = pd.Timestamp(start_date)
                 end_ts = pd.Timestamp(end_date)
                 
-                # Все депозиты, начавшиеся ДО или В период
-                deposit_report_filtered = deposit_report_full[
-                    deposit_report_full["Дата начала"] <= end_ts
-                ].copy()
-                
-                # Активные на конец периода (нет завершения или завершение после end_date)
-                active_on_end = deposit_report_filtered[
-                    (deposit_report_filtered["Дата завершения"].isna()) |
-                    (deposit_report_filtered["Дата завершения"] > end_ts)
+                # Активные на конец периода:
+                # - депозит начался ДО или В период (дата начала <= end_date)
+                # - И (нет даты завершения ИЛИ завершение ПОСЛЕ end_date)
+                active_on_end = deposit_report_full[
+                    (deposit_report_full["Дата начала"] <= end_ts) &
+                    (
+                        (deposit_report_full["Дата завершения"].isna()) |
+                        (deposit_report_full["Дата завершения"] > end_ts)
+                    )
                 ]
                 
                 ip_on_deposit = active_on_end["Сумма депозита (руб)"].sum() if not active_on_end.empty else 0.0
@@ -271,6 +269,7 @@ if st.session_state.data_loaded and \
         
         # Для физлица пока 0
         phys_on_deposit = 0.0
+
         
         # ============================================
         # ОТОБРАЖЕНИЕ МЕТРИК (6 колонок)
