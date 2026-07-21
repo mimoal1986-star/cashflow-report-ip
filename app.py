@@ -278,7 +278,7 @@ if st.session_state.data_loaded and \
             st.error(f"❌ Ошибка при формировании отчета: {str(e)}")
 else:
     if not st.session_state.data_loaded:
-        st.info("👆 Загрузите файлы и нажмите 'Обработать файлы'")
+        st.info("👆 Загрузитехотя бы один файл и нажмите 'Обработать файлы'")
     else:
         st.warning("⚠️ Данные не загружены. Попробуйте перезагрузить файлы.")
 
