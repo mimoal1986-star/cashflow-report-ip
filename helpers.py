@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Tuple
 import io
 from models import BalanceReport
+from deposit_report import DepositReportGenerator
 
 # ============================================
 # РАБОТА С ДАТАМИ
@@ -209,3 +210,38 @@ def get_deposit_summary(df: pd.DataFrame) -> dict:
         "total_interest": total_interest,
         "net_deposit": net_deposit
     }
+
+# helpers.py - добавить в конец файла
+
+
+def get_deposit_report(ip_operations: pd.DataFrame) -> pd.DataFrame:
+    """
+    Возвращает отчет по депозитам из операций ИП.
+    
+    Args:
+        ip_operations: DataFrame с операциями ИП (из IPParser.parse)
+        
+    Returns:
+        DataFrame с отчетом по депозитам
+    """
+    # Получаем депозитные операции из атрибутов
+    deposit_ops = ip_operations.attrs.get("deposits", pd.DataFrame())
+    
+    if deposit_ops.empty:
+        return pd.DataFrame(columns=[
+            "Номер сделки",
+            "Дата начала",
+            "Дата завершения",
+            "Сумма депозита (руб)",
+            "Процент депозита (руб)",
+            "Дней"
+        ])
+    
+    return DepositReportGenerator.generate_report(deposit_ops)
+
+def export_deposit_report_to_excel(report_df: pd.DataFrame, ip_operations: pd.DataFrame) -> io.BytesIO:
+    """
+    Экспортирует депозитный отчет в Excel.
+    """
+    deposit_ops = ip_operations.attrs.get("deposits", pd.DataFrame())
+    return DepositReportGenerator.export_to_excel(report_df, deposit_ops)
