@@ -4,6 +4,10 @@ from typing import Tuple
 import io
 from models import BalanceReport
 
+# ============================================
+# РАБОТА С ДАТАМИ
+# ============================================
+
 def get_date_range(ip_ops: pd.DataFrame, phys_ops: pd.DataFrame) -> Tuple[datetime, datetime]:
     """Определяет минимальную и максимальную дату из всех операций"""
     if ip_ops.empty and phys_ops.empty:
@@ -18,6 +22,21 @@ def get_date_range(ip_ops: pd.DataFrame, phys_ops: pd.DataFrame) -> Tuple[dateti
         return datetime.now(), datetime.now()
     
     return all_dates.min(), all_dates.max()
+
+
+def format_date(date: datetime) -> str:
+    """Форматирует дату для отображения"""
+    return date.strftime("%d.%m.%Y")
+
+
+def format_currency(amount: float) -> str:
+    """Форматирует сумму в валютном формате"""
+    return f"{amount:,.2f} ₽"
+
+
+# ============================================
+# ЭКСПОРТ В EXCEL
+# ============================================
 
 def create_excel_report(
     ip_report: BalanceReport,
@@ -99,3 +118,94 @@ def create_excel_report(
     
     output.seek(0)
     return output
+
+
+# ============================================
+# РАБОТА С ДЕПОЗИТАМИ (helper-функции)
+# ============================================
+
+def get_deposit_operations(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Возвращает DataFrame с депозитными операциями
+    (размещение, возврат, проценты)
+    
+    Это HELPER, потому что:
+    1. Он просто извлекает данные по меткам
+    2. Не содержит бизнес-логики расчета
+    3. Может использоваться в разных местах
+    """
+    if df.empty:
+        return pd.DataFrame()
+    
+    # Проверяем, есть ли метки депозитов
+    if "is_deposit_operation" not in df.columns:
+        return pd.DataFrame()
+    
+    # Возвращаем все депозитные операции
+    deposits = df[
+        df["is_deposit_operation"] | 
+        df["is_deposit_interest"]
+    ].copy()
+    
+    return deposits
+
+
+def get_non_deposit_operations(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Возвращает DataFrame с операциями, исключая депозитные
+    (размещение и возврат исключены, проценты остаются)
+    
+    Это HELPER, потому что:
+    1. Простая фильтрация по меткам
+    2. Не содержит бизнес-логики
+    3. Может использоваться в разных местах
+    """
+    if df.empty:
+        return pd.DataFrame()
+    
+    if "is_deposit_operation" not in df.columns:
+        return df.copy()
+    
+    # Возвращаем только НЕ депозитные операции
+    # (проценты остаются, т.к. они не marked as deposit_operation)
+    non_deposits = df[~df["is_deposit_operation"]].copy()
+    
+    return non_deposits
+
+
+def get_deposit_summary(df: pd.DataFrame) -> dict:
+    """
+    Возвращает сводку по депозитам
+    
+    Это HELPER, потому что:
+    1. Агрегирует данные
+    2. Не содержит бизнес-логики
+    3. Используется для отображения
+    """
+    if df.empty:
+        return {
+            "total_placed": 0.0,
+            "total_returned": 0.0,
+            "total_interest": 0.0,
+            "net_deposit": 0.0
+        }
+    
+    if "is_deposit_operation" not in df.columns:
+        return {
+            "total_placed": 0.0,
+            "total_returned": 0.0,
+            "total_interest": 0.0,
+            "net_deposit": 0.0
+        }
+    
+    total_placed = df[df["is_deposit_placement"]]["amount"].sum()
+    total_returned = df[df["is_deposit_return"]]["amount"].abs().sum()
+    total_interest = df[df["is_deposit_interest"]]["amount"].sum()
+    net_deposit = total_interest - total_placed + total_returned
+    
+    return {
+        "total_placed": total_placed,
+        "total_returned": total_returned,
+        "total_interest": total_interest,
+        "net_deposit": net_deposit
+    }
