@@ -5,7 +5,7 @@ import logging
 
 from parsers import IPParser, PhysParser, ParserError
 from calculators import BalanceCalculator
-from validators import DataValidator
+from data_validators import DataValidator
 from helpers import get_date_range, create_excel_report
 
 # Настройка страницы
