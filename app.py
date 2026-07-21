@@ -313,17 +313,7 @@ if st.session_state.data_loaded and \
                     
                     if deposit_report.empty:
                         st.info("ℹ️ Не найдены депозитные операции с номерами сделок")
-                    else:
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Всего депозитов", len(deposit_report))
-                        with col2:
-                            total_amount = deposit_report["Сумма депозита (руб)"].sum()
-                            st.metric("Общая сумма депозитов", f"{total_amount:,.2f} ₽")
-                        with col3:
-                            total_interest = deposit_report["Процент депозита (руб)"].sum()
-                            st.metric("Общие проценты", f"{total_interest:,.2f} ₽")
-                        
+                    else:                        
                         st.dataframe(
                             deposit_report,
                             use_container_width=True,
