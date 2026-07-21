@@ -346,43 +346,60 @@ if st.session_state.data_loaded and \
             st.header("🏦 Отчет по депозитам")
             
             if st.session_state.ip_operations is not None and not st.session_state.ip_operations.empty:
-                deposit_ops = st.session_state.ip_operations.attrs.get("deposits", pd.DataFrame())
+                # Получаем все депозитные операции
+                deposit_ops_all = st.session_state.ip_operations.attrs.get("deposits", pd.DataFrame())
                 
-                if deposit_ops.empty:
+                if deposit_ops_all.empty:
                     st.info("ℹ️ Нет депозитных операций в выписке ИП")
                 else:
-                    deposit_report = DepositReportGenerator.generate_report(deposit_ops)
+                    # Генерируем полный отчет по депозитам
+                    deposit_report_full = DepositReportGenerator.generate_report(deposit_ops_all)
                     
-                    if deposit_report.empty:
+                    if deposit_report_full.empty:
                         st.info("ℹ️ Не найдены депозитные операции с номерами сделок")
                     else:
-                        # Активные депозиты
-                        active_deposits = deposit_report[deposit_report["Дата завершения"].isna()]
-                        active_count = len(active_deposits)
-                        active_amount = active_deposits["Сумма депозита (руб)"].sum() if not active_deposits.empty else 0.0
+                        # ============================================
+                        # ФИЛЬТРАЦИЯ: только депозиты, начавшиеся в периоде
+                        # ============================================
+                        start_ts = pd.Timestamp(start_date)
+                        end_ts = pd.Timestamp(end_date)
                         
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric("📌 Кол-во депозитов активно (шт)", active_count)
-                        with col2:
-                            st.metric("💰 Общая сумма рублей на активных депозитах (руб)", f"{active_amount:,.2f} ₽")
+                        # Оставляем только те депозиты, у которых дата начала в периоде
+                        deposit_report = deposit_report_full[
+                            (deposit_report_full["Дата начала"] >= start_ts) & 
+                            (deposit_report_full["Дата начала"] <= end_ts)
+                        ].copy()
                         
-                        # Таблица
-                        st.dataframe(
-                            deposit_report,
-                            use_container_width=True,
-                            hide_index=True
-                        )
-                        
-                        # Кнопка скачивания
-                        excel_file = export_deposit_report_to_excel(deposit_report, st.session_state.ip_operations)
-                        st.download_button(
-                            label="📥 Скачать депозитный отчет Excel",
-                            data=excel_file,
-                            file_name=f"Депозитный_отчет_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key="download_deposits"
-                        )
+                        if deposit_report.empty:
+                            st.info(f"ℹ️ Нет депозитов, начавшихся в период {start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}")
+                        else:
+                            # Активные депозиты (без даты завершения)
+                            active_deposits = deposit_report[deposit_report["Дата завершения"].isna()]
+                            active_count = len(active_deposits)
+                            active_amount = active_deposits["Сумма депозита (руб)"].sum() if not active_deposits.empty else 0.0
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric("📌 Кол-во депозитов активно (шт)", active_count)
+                            with col2:
+                                st.metric("💰 Общая сумма рублей на активных депозитах (руб)", f"{active_amount:,.2f} ₽")
+                            
+                            # Таблица
+                            st.dataframe(
+                                deposit_report,
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                            
+                            # Кнопка скачивания
+                            excel_file = export_deposit_report_to_excel(deposit_report, st.session_state.ip_operations)
+                            st.download_button(
+                                label="📥 Скачать депозитный отчет Excel",
+                                data=excel_file,
+                                file_name=f"Депозитный_отчет_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                key="download_deposits"
+                            )
             else:
                 st.info("ℹ️ Нет данных ИП для формирования депозитного отчета")
         
