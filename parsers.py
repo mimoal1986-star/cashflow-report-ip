@@ -1,4 +1,3 @@
-# parsers.py 
 import pandas as pd
 from typing import Optional, List
 import re
@@ -101,7 +100,6 @@ class IPParser(BaseParser):
         try:
             df = pd.read_excel(file, engine="openpyxl")
             
-            # Ищем колонки
             date_col = BaseParser.find_column(df, ["дата"])
             debit_col = BaseParser.find_column(df, ["дебет"])
             credit_col = BaseParser.find_column(df, ["кредит"])
@@ -129,17 +127,15 @@ class IPParser(BaseParser):
             debit_values = df[debit_col].apply(BaseParser.clean_amount)
             credit_values = df[credit_col].apply(BaseParser.clean_amount)
             
-            # ============================================
-            # ОПРЕДЕЛЯЕМ ТИП ОПЕРАЦИИ (депозитная или нет)
-            # ============================================
             purpose_text = df[purpose_col].fillna("").astype(str)
             
+            # Определяем типы операций
             is_deposit_placement = purpose_text.apply(BaseParser.is_deposit_placement)
             is_deposit_return = purpose_text.apply(BaseParser.is_deposit_return)
             is_deposit_interest = purpose_text.apply(BaseParser.is_deposit_interest)
             is_deposit_operation = is_deposit_placement | is_deposit_return
             
-            # Создаем результат с ВСЕМИ операциями (для разделения)
+            # Создаем результат
             result = pd.DataFrame()
             result["date"] = result_date
             result["debit"] = debit_values
@@ -148,40 +144,91 @@ class IPParser(BaseParser):
             result["description"] = purpose_text
             result["source"] = "ip"
             
-            # ============================================
-            # ДОБАВЛЯЕМ МЕТКИ ДЛЯ ДЕПОЗИТОВ
-            # ============================================
+            # Метки депозитов
             result["is_deposit_placement"] = is_deposit_placement
             result["is_deposit_return"] = is_deposit_return
             result["is_deposit_interest"] = is_deposit_interest
             result["is_deposit_operation"] = is_deposit_operation
             
-            # ============================================
-            # ФИЛЬТРУЕМ ДЛЯ ОСНОВНОГО ОТЧЕТА
-            # Исключаем размещение и возврат, но оставляем проценты
-            # ============================================
-            result_main = result[~is_deposit_operation].copy()  # исключаем размещение и возврат
-            # Проценты остаются (они не excluded)
+            # Фильтруем для основного отчета
+            result_main = result[~is_deposit_operation].copy()
             
-            # Сохраняем отдельно депозитные операции для будущего отчета
+            # Сохраняем депозиты отдельно
             result_deposits = result[is_deposit_operation | is_deposit_interest].copy()
             
-            # Удаляем строки с пустыми датами
+            # Удаляем пустые даты
             result_main = result_main.dropna(subset=["date"])
             result_deposits = result_deposits.dropna(subset=["date"])
             
-            # Удаляем строки с нулевой суммой
+            # Удаляем нулевые суммы
             result_main = result_main[abs(result_main["amount"]) > 0.001]
             result_deposits = result_deposits[abs(result_deposits["amount"]) > 0.001]
             
-            # Сортируем по дате
+            # Сортируем
             result_main = result_main.sort_values("date").reset_index(drop=True)
             result_deposits = result_deposits.sort_values("date").reset_index(drop=True)
             
-            # Добавляем метаданные в DataFrame для использования в других частях
+            # Сохраняем депозиты в атрибутах
             result_main.attrs["deposits"] = result_deposits
             
             return result_main
             
         except Exception as e:
             raise ParserError(f"Ошибка при парсинге файла ИП: {str(e)}")
+
+
+class PhysParser(BaseParser):
+    """Парсер выписки физлица"""
+    
+    @staticmethod
+    def parse(file) -> pd.DataFrame:
+        """Парсит файл выписки физлица"""
+        try:
+            df = pd.read_excel(file, engine="openpyxl")
+            
+            date_col = BaseParser.find_column(df, ["дата операции", "дата опер"])
+            desc_col = BaseParser.find_column(df, ["описание"])
+            amount_col = BaseParser.find_column(df, ["сумма в валюте счета", "сумма"])
+            
+            if not all([date_col, desc_col, amount_col]):
+                missing = []
+                if not date_col: missing.append("Дата операции")
+                if not desc_col: missing.append("Описание")
+                if not amount_col: missing.append("Сумма")
+                raise ParserError(f"Отсутствуют колонки: {', '.join(missing)}")
+            
+            # Парсим даты
+            try:
+                result_date = pd.to_datetime(df[date_col], format="%d.%m.%Y", errors="coerce")
+            except:
+                result_date = pd.to_datetime(df[date_col], errors="coerce")
+            
+            if result_date.isna().all():
+                date_str = df[date_col].astype(str)
+                result_date = pd.to_datetime(date_str, format="%d.%m.%Y", errors="coerce")
+            
+            result = pd.DataFrame()
+            result["date"] = result_date
+            result["description"] = df[desc_col].fillna("").astype(str)
+            result["amount"] = df[amount_col].apply(BaseParser.clean_amount)
+            result["source"] = "phys"
+            
+            # Удаляем пустые даты
+            result = result.dropna(subset=["date"])
+            
+            # Удаляем нулевые суммы
+            result = result[abs(result["amount"]) > 0.001]
+            
+            # Сортируем
+            result = result.sort_values("date").reset_index(drop=True)
+            
+            return result
+            
+        except Exception as e:
+            raise ParserError(f"Ошибка при парсинге файла физлица: {str(e)}")
+
+
+# ============================================
+# ЯВНЫЙ ЭКСПОРТ КЛАССОВ
+# ============================================
+__all__ = ['IPParser', 'PhysParser', 'ParserError']
