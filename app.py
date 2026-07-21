@@ -243,21 +243,31 @@ if st.session_state.data_loaded and \
         # РАСЧЕТ ДЛЯ НОВЫХ БЛОКОВ
         # ============================================
         
-        # Получаем активные депозиты для расчета "Из них на депозите"
-        deposit_ops = st.session_state.ip_operations.attrs.get("deposits", pd.DataFrame()) if st.session_state.ip_operations is not None else pd.DataFrame()
+        # Получаем все депозитные операции
+        deposit_ops_all = st.session_state.ip_operations.attrs.get("deposits", pd.DataFrame()) if st.session_state.ip_operations is not None else pd.DataFrame()
         
-        if not deposit_ops.empty:
-            deposit_report = DepositReportGenerator.generate_report(deposit_ops)
-            if not deposit_report.empty:
-                active_deposits = deposit_report[deposit_report["Дата завершения"].isna()]
-                active_deposit_amount = active_deposits["Сумма депозита (руб)"].sum() if not active_deposits.empty else 0.0
+        if not deposit_ops_all.empty:
+            deposit_report_full = DepositReportGenerator.generate_report(deposit_ops_all)
+            if not deposit_report_full.empty:
+                start_ts = pd.Timestamp(start_date)
+                end_ts = pd.Timestamp(end_date)
+                
+                # Все депозиты, начавшиеся ДО или В период
+                deposit_report_filtered = deposit_report_full[
+                    deposit_report_full["Дата начала"] <= end_ts
+                ].copy()
+                
+                # Активные на конец периода (нет завершения или завершение после end_date)
+                active_on_end = deposit_report_filtered[
+                    (deposit_report_filtered["Дата завершения"].isna()) |
+                    (deposit_report_filtered["Дата завершения"] > end_ts)
+                ]
+                
+                ip_on_deposit = active_on_end["Сумма депозита (руб)"].sum() if not active_on_end.empty else 0.0
             else:
-                active_deposit_amount = 0.0
+                ip_on_deposit = 0.0
         else:
-            active_deposit_amount = 0.0
-        
-        # Расчет "Из них на депозите" для ИП
-        ip_on_deposit = active_deposit_amount
+            ip_on_deposit = 0.0
         
         # Для физлица пока 0
         phys_on_deposit = 0.0
