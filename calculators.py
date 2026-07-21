@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime
-from typing import Dict, Tuple
+from typing import Dict
 from models import BalanceReport
 
 class BalanceCalculator:
@@ -12,30 +12,40 @@ class BalanceCalculator:
         phys_operations: pd.DataFrame,
         start_date: datetime,
         end_date: datetime,
-        use_zero_start: bool = True  # ← ДОБАВИТЬ ЭТОТ ПАРАМЕТР
+        use_zero_start: bool = True
     ) -> Dict[str, BalanceReport]:
         """
         Рассчитывает остатки для ИП и физлица
-        
-        Args:
-            ip_operations: DataFrame с операциями ИП
-            phys_operations: DataFrame с операциями физлица
-            start_date: дата начала периода
-            end_date: дата окончания периода
-            use_zero_start: если True - начальный остаток физлица = 0
-        
-        Returns:
-            Dict с ключами "ip" и "phys" - объекты BalanceReport
         """
         # Проверяем входные данные
         if ip_operations.empty and phys_operations.empty:
             raise ValueError("Нет данных для расчета")
         
-        # Создаем копии данных, чтобы не изменять оригиналы
+        # Создаем копии данных
         ip_ops = ip_operations.copy() if not ip_operations.empty else pd.DataFrame()
         phys_ops = phys_operations.copy() if not phys_operations.empty else pd.DataFrame()
         
-        # Фильтруем операции по периоду
+        # ============================================
+        # 1. НАЧАЛЬНЫЙ ОСТАТОК (на 1-е число месяца начала периода)
+        # ============================================
+        start_month = start_date.replace(day=1)
+        
+        # Все операции ДО 1-го числа месяца начала периода
+        ip_before = ip_ops[ip_ops["date"] < start_month] if not ip_ops.empty else pd.DataFrame()
+        phys_before = phys_ops[phys_ops["date"] < start_month] if not phys_ops.empty else pd.DataFrame()
+        
+        # Начальный остаток ИП
+        start_balance_ip = ip_before["amount"].sum() if not ip_before.empty else 0.0
+        
+        # Начальный остаток физлица
+        if use_zero_start:
+            start_balance_phys = 0.0
+        else:
+            start_balance_phys = phys_before["amount"].sum() if not phys_before.empty else 0.0
+        
+        # ============================================
+        # 2. ФИЛЬТРУЕМ ОПЕРАЦИИ ЗА ПЕРИОД (для отображения)
+        # ============================================
         ip_period = ip_ops[
             (ip_ops["date"] >= start_date) & 
             (ip_ops["date"] <= end_date)
@@ -46,30 +56,22 @@ class BalanceCalculator:
             (phys_ops["date"] <= end_date)
         ] if not phys_ops.empty else pd.DataFrame()
         
-        # Операции до начала периода
-        ip_before = ip_ops[ip_ops["date"] < start_date] if not ip_ops.empty else pd.DataFrame()
-        phys_before = phys_ops[phys_ops["date"] < start_date] if not phys_ops.empty else pd.DataFrame()
+        # ============================================
+        # 3. КОНЕЧНЫЙ ОСТАТОК
+        # ============================================
+        # Суммируем ВСЕ операции ДО end_date (включая операции до периода)
+        ip_until_end = ip_ops[ip_ops["date"] <= end_date] if not ip_ops.empty else pd.DataFrame()
+        end_balance_ip = ip_until_end["amount"].sum() if not ip_until_end.empty else 0.0
         
-        # ============================================
-        # РАСЧЕТ ДЛЯ ИП
-        # ============================================
-        start_balance_ip = ip_before["amount"].sum() if not ip_before.empty else 0.0
-        end_balance_ip = start_balance_ip + (ip_period["amount"].sum() if not ip_period.empty else 0.0)
-        
-        # ============================================
-        # РАСЧЕТ ДЛЯ ФИЗЛИЦА
-        # ============================================
         if use_zero_start:
-            # По условию: начальный остаток = 0
-            start_balance_phys = 0.0
-            end_balance_phys = phys_period["amount"].sum() if not phys_period.empty else 0.0
+            phys_until_end = phys_ops[phys_ops["date"] <= end_date] if not phys_ops.empty else pd.DataFrame()
+            end_balance_phys = phys_until_end["amount"].sum() if not phys_until_end.empty else 0.0
         else:
-            # Реальный остаток на начало периода
-            start_balance_phys = phys_before["amount"].sum() if not phys_before.empty else 0.0
-            end_balance_phys = start_balance_phys + (phys_period["amount"].sum() if not phys_period.empty else 0.0)
+            phys_until_end = phys_ops[phys_ops["date"] <= end_date] if not phys_ops.empty else pd.DataFrame()
+            end_balance_phys = phys_until_end["amount"].sum() if not phys_until_end.empty else 0.0
         
         # ============================================
-        # ПОМЕСЯЧНАЯ ДИНАМИКА
+        # 4. ПОМЕСЯЧНАЯ ДИНАМИКА (на 1-е число каждого месяца)
         # ============================================
         dynamics = BalanceCalculator._calculate_monthly_dynamics(
             ip_ops, phys_ops, start_date, end_date,
@@ -92,14 +94,12 @@ class BalanceCalculator:
         start_balance_phys: float,
         use_zero_start: bool = True
     ) -> Dict[str, pd.DataFrame]:
-        """Рассчитывает помесячную динамику остатков"""
-        
+        """
+        Рассчитывает помесячную динамику остатков на 1-е число каждого месяца
+        """
         # Генерируем первое число каждого месяца в периоде
-        months = pd.date_range(
-            start=start_date.replace(day=1),
-            end=end_date,
-            freq="MS"
-        )
+        start_month = start_date.replace(day=1)
+        months = pd.date_range(start=start_month, end=end_date, freq="MS")
         
         if len(months) == 0:
             return {
@@ -110,41 +110,54 @@ class BalanceCalculator:
         dynamics_ip = []
         dynamics_phys = []
         
-        # Текущие остатки
+        # Текущий остаток = начальный остаток
         current_balance_ip = start_balance_ip
         current_balance_phys = start_balance_phys
         
-        for month_start in months:
-            # Конец месяца
-            month_end = month_start + pd.offsets.MonthEnd(1)
+        # === ПЕРВЫЙ МЕСЯЦ ===
+        first_month = months[0]
+        dynamics_ip.append({
+            "month": first_month.strftime("%B %Y"),
+            "balance": round(current_balance_ip, 2)
+        })
+        dynamics_phys.append({
+            "month": first_month.strftime("%B %Y"),
+            "balance": round(current_balance_phys, 2)
+        })
+        
+        # === ОСТАЛЬНЫЕ МЕСЯЦА ===
+        for i in range(1, len(months)):
+            current_month = months[i]
+            prev_month = months[i-1]
             
-            # Операции за месяц (только в пределах периода)
+            # Конец предыдущего месяца
+            prev_month_end = prev_month + pd.offsets.MonthEnd(1)
+            
+            # Операции за ПРЕДЫДУЩИЙ месяц (с prev_month по prev_month_end)
             month_ops_ip = ip_ops[
-                (ip_ops["date"] >= month_start) & 
-                (ip_ops["date"] <= min(month_end, end_date))
+                (ip_ops["date"] >= prev_month) & 
+                (ip_ops["date"] <= prev_month_end)
             ] if not ip_ops.empty else pd.DataFrame()
             
             month_ops_phys = phys_ops[
-                (phys_ops["date"] >= month_start) & 
-                (phys_ops["date"] <= min(month_end, end_date))
+                (phys_ops["date"] >= prev_month) & 
+                (phys_ops["date"] <= prev_month_end)
             ] if not phys_ops.empty else pd.DataFrame()
             
-            # Обновляем остатки
+            # Добавляем операции ТОЛЬКО за предыдущий месяц
             current_balance_ip += month_ops_ip["amount"].sum() if not month_ops_ip.empty else 0.0
             
             if use_zero_start:
-                # Для физлица считаем только операции в периоде
                 current_balance_phys += month_ops_phys["amount"].sum() if not month_ops_phys.empty else 0.0
             else:
-                # Для физлица учитываем все операции
                 current_balance_phys += month_ops_phys["amount"].sum() if not month_ops_phys.empty else 0.0
             
             dynamics_ip.append({
-                "month": month_start.strftime("%B %Y"),
+                "month": current_month.strftime("%B %Y"),
                 "balance": round(current_balance_ip, 2)
             })
             dynamics_phys.append({
-                "month": month_start.strftime("%B %Y"),
+                "month": current_month.strftime("%B %Y"),
                 "balance": round(current_balance_phys, 2)
             })
         
