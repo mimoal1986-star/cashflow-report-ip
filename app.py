@@ -6,7 +6,8 @@ import logging
 from parsers import IPParser, PhysParser, ParserError
 from calculators import BalanceCalculator
 from data_validators import DataValidator
-from helpers import get_date_range, create_excel_report
+from helpers import get_date_range, create_excel_report, export_deposit_report_to_excel
+from deposit_report import DepositReportGenerator
 
 # Настройка страницы
 st.set_page_config(
@@ -102,7 +103,7 @@ if st.button("🔄 Обработать файлы", type="primary"):
                     DataValidator.validate_amounts(st.session_state.phys_operations)
                 
                 st.session_state.data_loaded = True
-                st.session_state.report_ready = False  # Сбрасываем готовность отчета
+                st.session_state.report_ready = False
                 
                 st.success("✅ Файлы успешно обработаны и проверены!")
                 
@@ -193,7 +194,7 @@ if st.session_state.data_loaded and \
     )
     
     # ============================================
-    # КНОПКА РАСЧЕТА - сохраняем результат в сессию
+    # КНОПКА РАСЧЕТА
     # ============================================
     if st.button("📊 Сформировать отчет", type="primary"):
         try:
@@ -211,7 +212,6 @@ if st.session_state.data_loaded and \
                 st.session_state.ip_report = reports["ip"]
                 st.session_state.phys_report = reports["phys"]
                 
-                # Создаем Excel файл сразу и сохраняем в сессию
                 excel_file = create_excel_report(
                     st.session_state.ip_report,
                     st.session_state.phys_report,
@@ -231,7 +231,7 @@ if st.session_state.data_loaded and \
             st.error(f"❌ Ошибка при формировании отчета: {str(e)}")
     
     # ============================================
-    # ОТОБРАЖЕНИЕ РЕЗУЛЬТАТОВ (если есть)
+    # ОТОБРАЖЕНИЕ РЕЗУЛЬТАТОВ
     # ============================================
     if st.session_state.report_ready and st.session_state.ip_report is not None:
         ip_report = st.session_state.ip_report
@@ -267,7 +267,8 @@ if st.session_state.data_loaded and \
         total_end = ip_report.end_balance + phys_report.end_balance
         st.info(f"💰 **Общий остаток:** {total_start:,.2f} ₽ → {total_end:,.2f} ₽ (изменение: {total_end - total_start:,.2f} ₽)")
         
-        tab1, tab2 = st.tabs(["📊 Динамика ИП", "📊 Динамика физлица"])
+        # ✅ ИСПРАВЛЕНО: Все три вкладки создаются вместе
+        tab1, tab2, tab3 = st.tabs(["📊 Динамика ИП", "📊 Динамика физлица", "🏦 Депозиты"])
         
         with tab1:
             st.subheader("Динамика остатка ИП помесячно")
@@ -297,10 +298,52 @@ if st.session_state.data_loaded and \
             else:
                 st.info("Нет данных для отображения динамики физлица")
         
+        # ✅ ИСПРАВЛЕНО: Вкладка с депозитами теперь внутри правильного блока
+        with tab3:
+            st.header("🏦 Отчет по депозитам")
+            
+            # ✅ ИСПРАВЛЕНО: Проверка на None
+            if st.session_state.ip_operations is not None and not st.session_state.ip_operations.empty:
+                deposit_ops = st.session_state.ip_operations.attrs.get("deposits", pd.DataFrame())
+                
+                if deposit_ops.empty:
+                    st.info("ℹ️ Нет депозитных операций в выписке ИП")
+                else:
+                    deposit_report = DepositReportGenerator.generate_report(deposit_ops)
+                    
+                    if deposit_report.empty:
+                        st.info("ℹ️ Не найдены депозитные операции с номерами сделок")
+                    else:
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Всего депозитов", len(deposit_report))
+                        with col2:
+                            total_amount = deposit_report["Сумма депозита (руб)"].sum()
+                            st.metric("Общая сумма депозитов", f"{total_amount:,.2f} ₽")
+                        with col3:
+                            total_interest = deposit_report["Процент депозита (руб)"].sum()
+                            st.metric("Общие проценты", f"{total_interest:,.2f} ₽")
+                        
+                        st.dataframe(
+                            deposit_report,
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                        
+                        excel_file = export_deposit_report_to_excel(deposit_report, st.session_state.ip_operations)
+                        st.download_button(
+                            label="📥 Скачать депозитный отчет Excel",
+                            data=excel_file,
+                            file_name=f"Депозитный_отчет_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="download_deposits"
+                        )
+            else:
+                st.info("ℹ️ Нет данных ИП для формирования депозитного отчета")
+        
         # ============================================
-        # КНОПКА СКАЧИВАНИЯ (ВНЕ УСЛОВНОГО БЛОКА)
+        # КНОПКА СКАЧИВАНИЯ ОСНОВНОГО ОТЧЕТА
         # ============================================
-        # Кнопка скачивания всегда видна, если отчет готов
         if st.session_state.excel_data is not None:
             st.download_button(
                 label="📥 Скачать отчет Excel",
@@ -308,7 +351,7 @@ if st.session_state.data_loaded and \
                 file_name=st.session_state.report_filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
-                key="download_excel"  # ← фиксированный ключ
+                key="download_excel"
             )
 
 else:
