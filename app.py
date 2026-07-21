@@ -50,27 +50,55 @@ with col2:
 
 # Кнопка обработки
 if st.button("🔄 Обработать файлы", type="primary"):
-    if file_ip or file_phys:  # ← было: if file_ip and file_phys
+    if file_ip or file_phys:
         try:
             with st.spinner("Обработка файлов..."):
                 # Парсим только загруженные файлы
                 if file_ip:
                     st.session_state.ip_operations = IPParser.parse(file_ip)
                 else:
-                    st.session_state.ip_operations = pd.DataFrame()  # пустой DataFrame
+                    st.session_state.ip_operations = pd.DataFrame()
                 
                 if file_phys:
                     st.session_state.phys_operations = PhysParser.parse(file_phys)
                 else:
-                    st.session_state.phys_operations = pd.DataFrame()  # пустой DataFrame
+                    st.session_state.phys_operations = pd.DataFrame()
                 
-                # Валидация данных (только для непустых DataFrame)
+                # ============================================
+                # ВАЛИДАЦИЯ ДАННЫХ (с показом дубликатов)
+                # ============================================
+                
+                # Проверка дубликатов в ИП
                 if not st.session_state.ip_operations.empty:
-                    DataValidator.validate_duplicates(st.session_state.ip_operations)
+                    duplicates_ip = DataValidator.find_duplicates(st.session_state.ip_operations)
+                    if not duplicates_ip.empty:
+                        st.warning(f"⚠️ Обнаружены дублирующиеся операции в выписке ИП: {len(duplicates_ip)} шт.")
+                        with st.expander("📋 Показать дубликаты (ИП)"):
+                            st.dataframe(
+                                duplicates_ip[["date", "amount", "description"]],
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                        # НЕ останавливаем работу!
+                
+                # Проверка дубликатов в физлице
+                if not st.session_state.phys_operations.empty:
+                    duplicates_phys = DataValidator.find_duplicates(st.session_state.phys_operations)
+                    if not duplicates_phys.empty:
+                        st.warning(f"⚠️ Обнаружены дублирующиеся операции в выписке физлица: {len(duplicates_phys)} шт.")
+                        with st.expander("📋 Показать дубликаты (Физлицо)"):
+                            st.dataframe(
+                                duplicates_phys[["date", "amount", "description"]],
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                        # НЕ останавливаем работу!
+                
+                # Проверка сумм
+                if not st.session_state.ip_operations.empty:
                     DataValidator.validate_amounts(st.session_state.ip_operations)
                 
                 if not st.session_state.phys_operations.empty:
-                    DataValidator.validate_duplicates(st.session_state.phys_operations)
                     DataValidator.validate_amounts(st.session_state.phys_operations)
                 
                 st.session_state.data_loaded = True
