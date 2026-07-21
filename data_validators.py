@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime
-from typing import Tuple
+from typing import Tuple, List
 
 class DataValidator:
     """Валидатор данных"""
@@ -16,7 +16,7 @@ class DataValidator:
     def validate_operations(df: pd.DataFrame) -> bool:
         """Проверяет, что в данных есть операции"""
         if df.empty:
-            return True  # ← изменено: пустой DataFrame - это не ошибка
+            return True
         return True
     
     @staticmethod
@@ -27,22 +27,25 @@ class DataValidator:
         return True, "OK"
     
     @staticmethod
-    def validate_duplicates(df: pd.DataFrame) -> bool:
-        """Проверяет наличие дубликатов операций"""
-        if df.empty:
-            return True  # ← изменено: пустой DataFrame - это не ошибка
+    def find_duplicates(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Находит дублирующиеся операции
         
-        duplicates = df.duplicated(subset=["date", "amount", "description"], keep=False)
-        if duplicates.any():
-            dup_count = duplicates.sum()
-            raise ValueError(f"Обнаружены дублирующиеся операции: {dup_count} шт.")
-        return True
+        Returns:
+            DataFrame с дубликатами или пустой DataFrame
+        """
+        if df.empty:
+            return pd.DataFrame()
+        
+        # Находим дубликаты по дате, сумме и описанию
+        duplicates = df[df.duplicated(subset=["date", "amount", "description"], keep=False)]
+        return duplicates
     
     @staticmethod
     def validate_amounts(df: pd.DataFrame) -> bool:
         """Проверяет корректность сумм"""
         if df.empty:
-            return True  # ← изменено: пустой DataFrame - это не ошибка
+            return True
         
         if (df["amount"] < -1e9).any() or (df["amount"] > 1e9).any():
             raise ValueError("Обнаружены некорректные суммы (слишком большие или маленькие)")
