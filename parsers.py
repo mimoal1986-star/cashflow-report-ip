@@ -48,43 +48,24 @@ class BaseParser:
         """Проверяет, является ли операция размещением депозита"""
         if not text:
             return False
-        text = str(text).lower()
-        keywords = [
-            "размещение денежных средств во вклад",
-            "размещение дс во вклад",
-            "размещение во вклад",
-            "открытие депозита"
-        ]
-        return any(keyword in text for keyword in keywords)
+        text = str(text)
+        return "Размещение денежных средств во Вклад" in text
     
     @staticmethod
     def is_deposit_return(text: str) -> bool:
         """Проверяет, является ли операция возвратом депозита"""
         if not text:
             return False
-        text = str(text).lower()
-        keywords = [
-            "возврат депозита",
-            "возврат вклада",
-            "закрытие депозита",
-            "возврат суммы депозита"
-        ]
-        return any(keyword in text for keyword in keywords)
+        text = str(text)
+        return "ВОЗВРАТ ДЕПОЗИТ С ИП" in text
     
     @staticmethod
     def is_deposit_interest(text: str) -> bool:
         """Проверяет, является ли операция уплатой процентов по депозиту"""
         if not text:
             return False
-        text = str(text).lower()
-        keywords = [
-            "уплата процентов депозит",
-            "проценты по депозиту",
-            "проценты по вкладу",
-            "выплата процентов",
-            "начисление процентов"
-        ]
-        return any(keyword in text for keyword in keywords)
+        text = str(text)
+        return "УПЛАТА ПРОЦЕНТОВ ДЕПОЗИТ С ИП" in text
     
     @staticmethod
     def is_deposit_operation(text: str) -> bool:
@@ -150,10 +131,10 @@ class IPParser(BaseParser):
             result["is_deposit_interest"] = is_deposit_interest
             result["is_deposit_operation"] = is_deposit_operation
             
-            # Фильтруем для основного отчета
+            # Фильтруем для основного отчета (исключаем размещение и возврат, проценты остаются)
             result_main = result[~is_deposit_operation].copy()
             
-            # Сохраняем депозиты отдельно
+            # Сохраняем все депозитные операции отдельно (для будущего депозитного отчета)
             result_deposits = result[is_deposit_operation | is_deposit_interest].copy()
             
             # Удаляем пустые даты
@@ -168,14 +149,13 @@ class IPParser(BaseParser):
             result_main = result_main.sort_values("date").reset_index(drop=True)
             result_deposits = result_deposits.sort_values("date").reset_index(drop=True)
             
-            # Сохраняем депозиты в атрибутах
+            # Сохраняем депозиты в атрибутах для доступа из других модулей
             result_main.attrs["deposits"] = result_deposits
             
             return result_main
             
         except Exception as e:
             raise ParserError(f"Ошибка при парсинге файла ИП: {str(e)}")
-
 
 class PhysParser(BaseParser):
     """Парсер выписки физлица"""
@@ -227,8 +207,4 @@ class PhysParser(BaseParser):
         except Exception as e:
             raise ParserError(f"Ошибка при парсинге файла физлица: {str(e)}")
 
-
-# ============================================
-# ЯВНЫЙ ЭКСПОРТ КЛАССОВ
-# ============================================
 __all__ = ['IPParser', 'PhysParser', 'ParserError']
