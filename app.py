@@ -239,35 +239,78 @@ if st.session_state.data_loaded and \
         
         st.header("📈 Отчет по движению денежных средств")
         
-        col1, col2, col3, col4 = st.columns(4)
+        # ============================================
+        # РАСЧЕТ ДЛЯ НОВЫХ БЛОКОВ
+        # ============================================
+        
+        # Получаем активные депозиты для расчета "Из них на депозите"
+        deposit_ops = st.session_state.ip_operations.attrs.get("deposits", pd.DataFrame()) if st.session_state.ip_operations is not None else pd.DataFrame()
+        
+        if not deposit_ops.empty:
+            deposit_report = DepositReportGenerator.generate_report(deposit_ops)
+            if not deposit_report.empty:
+                active_deposits = deposit_report[deposit_report["Дата завершения"].isna()]
+                active_deposit_amount = active_deposits["Сумма депозита (руб)"].sum() if not active_deposits.empty else 0.0
+            else:
+                active_deposit_amount = 0.0
+        else:
+            active_deposit_amount = 0.0
+        
+        # Расчет "Из них на депозите" для ИП
+        ip_on_deposit = active_deposit_amount
+        
+        # Для физлица пока 0
+        phys_on_deposit = 0.0
+        
+        # ============================================
+        # ОТОБРАЖЕНИЕ МЕТРИК (6 колонок)
+        # ============================================
+        
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        
         with col1:
             st.metric(
                 "🏢 Начальный остаток ИП",
-                f"{ip_report.start_balance:,.2f} ₽",
-                delta=f"{ip_report.end_balance - ip_report.start_balance:,.2f} ₽"
+                f"{ip_report.start_balance:,.2f} ₽"
             )
+        
         with col2:
             st.metric(
                 "🏢 Конечный остаток ИП",
-                f"{ip_report.end_balance:,.2f} ₽"
+                f"{ip_report.end_balance:,.2f} ₽",
+                delta=f"{ip_report.end_balance - ip_report.start_balance:,.2f} ₽"
             )
+        
         with col3:
             st.metric(
-                "👤 Начальный остаток физлица",
-                f"{phys_report.start_balance:,.2f} ₽",
-                delta=f"{phys_report.end_balance - phys_report.start_balance:,.2f} ₽"
+                "🏦 Из них на депозите",
+                f"{ip_on_deposit:,.2f} ₽"
             )
+        
         with col4:
             st.metric(
+                "👤 Начальный остаток физлица",
+                f"{phys_report.start_balance:,.2f} ₽"
+            )
+        
+        with col5:
+            st.metric(
                 "👤 Конечный остаток физлица",
-                f"{phys_report.end_balance:,.2f} ₽"
+                f"{phys_report.end_balance:,.2f} ₽",
+                delta=f"{phys_report.end_balance - phys_report.start_balance:,.2f} ₽"
+            )
+        
+        with col6:
+            st.metric(
+                "🏦 Из них на вкладе",
+                f"{phys_on_deposit:,.2f} ₽"
             )
         
         total_start = ip_report.start_balance + phys_report.start_balance
         total_end = ip_report.end_balance + phys_report.end_balance
         st.info(f"💰 **Общий остаток:** {total_start:,.2f} ₽ → {total_end:,.2f} ₽ (изменение: {total_end - total_start:,.2f} ₽)")
         
-        # ✅ ИСПРАВЛЕНО: Все три вкладки создаются вместе
+        # ✅ Все три вкладки создаются вместе
         tab1, tab2, tab3 = st.tabs(["📊 Динамика ИП", "📊 Динамика физлица", "🏦 Депозиты"])
         
         with tab1:
@@ -313,7 +356,7 @@ if st.session_state.data_loaded and \
                     if deposit_report.empty:
                         st.info("ℹ️ Не найдены депозитные операции с номерами сделок")
                     else:
-                        # ✅ НОВЫЙ БЛОК - Активные депозиты
+                        # Активные депозиты
                         active_deposits = deposit_report[deposit_report["Дата завершения"].isna()]
                         active_count = len(active_deposits)
                         active_amount = active_deposits["Сумма депозита (руб)"].sum() if not active_deposits.empty else 0.0
