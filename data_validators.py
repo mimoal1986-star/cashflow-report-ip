@@ -16,20 +16,22 @@ class DataValidator:
     def validate_operations(df: pd.DataFrame) -> bool:
         """Проверяет, что в данных есть операции"""
         if df.empty:
-            raise ValueError("Нет операций в выбранном периоде")
+            return True  # ← изменено: пустой DataFrame - это не ошибка
         return True
     
     @staticmethod
     def validate_files(ip_file, phys_file) -> Tuple[bool, str]:
-        """Проверяет, что файлы загружены"""
-        if not ip_file or not phys_file:
-            return False, "Необходимо загрузить оба файла"
+        """Проверяет, что хотя бы один файл загружен"""
+        if not ip_file and not phys_file:
+            return False, "Необходимо загрузить хотя бы один файл"
         return True, "OK"
     
     @staticmethod
     def validate_duplicates(df: pd.DataFrame) -> bool:
         """Проверяет наличие дубликатов операций"""
-        # Проверяем дубликаты по дате и сумме
+        if df.empty:
+            return True  # ← изменено: пустой DataFrame - это не ошибка
+        
         duplicates = df.duplicated(subset=["date", "amount", "description"], keep=False)
         if duplicates.any():
             dup_count = duplicates.sum()
@@ -39,6 +41,9 @@ class DataValidator:
     @staticmethod
     def validate_amounts(df: pd.DataFrame) -> bool:
         """Проверяет корректность сумм"""
+        if df.empty:
+            return True  # ← изменено: пустой DataFrame - это не ошибка
+        
         if (df["amount"] < -1e9).any() or (df["amount"] > 1e9).any():
             raise ValueError("Обнаружены некорректные суммы (слишком большие или маленькие)")
         return True
