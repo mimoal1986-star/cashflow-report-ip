@@ -1,3 +1,4 @@
+# parsers.py 
 import pandas as pd
 from typing import Optional, List
 import re
@@ -17,9 +18,7 @@ class BaseParser:
         if isinstance(value, (int, float)):
             return float(value)
         
-        # Убираем пробелы, заменяем запятую на точку
         cleaned = str(value).replace(" ", "").replace(",", ".")
-        # Оставляем только цифры, точку и минус
         cleaned = re.sub(r"[^\d.-]", "", cleaned)
         
         try:
@@ -37,7 +36,6 @@ class BaseParser:
             if name_lower in df_cols_lower:
                 return df_cols_lower[name_lower]
         
-        # Поиск по частичному совпадению
         for name in possible_names:
             name_lower = name.lower()
             for col in df.columns:
@@ -69,23 +67,40 @@ class IPParser(BaseParser):
                 if not purpose_col: missing.append("Назначение платежа")
                 raise ParserError(f"Отсутствуют колонки: {', '.join(missing)}")
             
-            # Очищаем данные
+            # ============================================
+            # ПАРСИНГ ДАТЫ С ПРАВИЛЬНЫМ ФОРМАТОМ
+            # ============================================
+            # Пробуем парсить с форматом DD.MM.YYYY
+            try:
+                # Сначала пробуем явный формат
+                result_date = pd.to_datetime(df[date_col], format="%d.%m.%Y", errors="coerce")
+            except:
+                # Если не получается, пробуем автоматически
+                result_date = pd.to_datetime(df[date_col], errors="coerce")
+            
+            # Если все еще есть ошибки, пробуем ручной парсинг
+            if result_date.isna().all():
+                # Пробуем парсить как строки
+                date_str = df[date_col].astype(str)
+                result_date = pd.to_datetime(date_str, format="%d.%m.%Y", errors="coerce")
+            
+            # Очищаем суммы
             debit_values = df[debit_col].apply(BaseParser.clean_amount)
             credit_values = df[credit_col].apply(BaseParser.clean_amount)
             
             # Создаем результат
             result = pd.DataFrame()
-            result["date"] = pd.to_datetime(df[date_col], errors="coerce")
+            result["date"] = result_date
             result["debit"] = debit_values
             result["credit"] = credit_values
-            result["amount"] = credit_values - debit_values  # Приход - расход
+            result["amount"] = credit_values - debit_values
             result["description"] = df[purpose_col].fillna("").astype(str)
             result["source"] = "ip"
             
             # Удаляем строки с пустыми датами
             result = result.dropna(subset=["date"])
             
-            # Удаляем строки с нулевой суммой (опционально)
+            # Удаляем строки с нулевой суммой
             result = result[abs(result["amount"]) > 0.001]
             
             # Сортируем по дате
@@ -117,8 +132,20 @@ class PhysParser(BaseParser):
                 if not amount_col: missing.append("Сумма")
                 raise ParserError(f"Отсутствуют колонки: {', '.join(missing)}")
             
+            # ============================================
+            # ПАРСИНГ ДАТЫ С ПРАВИЛЬНЫМ ФОРМАТОМ
+            # ============================================
+            try:
+                result_date = pd.to_datetime(df[date_col], format="%d.%m.%Y", errors="coerce")
+            except:
+                result_date = pd.to_datetime(df[date_col], errors="coerce")
+            
+            if result_date.isna().all():
+                date_str = df[date_col].astype(str)
+                result_date = pd.to_datetime(date_str, format="%d.%m.%Y", errors="coerce")
+            
             result = pd.DataFrame()
-            result["date"] = pd.to_datetime(df[date_col], errors="coerce")
+            result["date"] = result_date
             result["description"] = df[desc_col].fillna("").astype(str)
             result["amount"] = df[amount_col].apply(BaseParser.clean_amount)
             result["source"] = "phys"
