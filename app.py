@@ -292,7 +292,7 @@ if st.session_state.data_loaded and \
         
         with col3:
             st.metric(
-                "🏦 На депозите",
+                "🏦 Их них на депозите",
                 f"{ip_on_deposit:,.2f} ₽"
             )
         
