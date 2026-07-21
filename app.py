@@ -324,15 +324,107 @@ if st.session_state.data_loaded and \
         
         with tab1:
             st.subheader("Динамика остатка ИП помесячно")
+            
             if not ip_report.monthly_dynamics.empty:
-                st.line_chart(
-                    ip_report.monthly_dynamics.set_index("month")["balance"]
-                )
-                st.dataframe(
-                    ip_report.monthly_dynamics,
-                    use_container_width=True,
-                    hide_index=True
-                )
+                # Берем данные динамики
+                df_dynamics = ip_report.monthly_dynamics.copy()
+                
+                # Преобразуем месяц в краткий формат: Янв'26, Фев'26, ...
+                df_dynamics["month_short"] = pd.to_datetime(
+                    df_dynamics["month"], format="%B %Y"
+                ).dt.strftime("%b'%y")
+                
+                # ============================================
+                # РАСЧЕТ ПОКАЗАТЕЛЕЙ
+                # ============================================
+                
+                # Получаем начальный остаток (первая строка динамики)
+                start_balance = df_dynamics["balance"].iloc[0] if not df_dynamics.empty else 0
+                
+                # Динамика = изменение остатка
+                df_dynamics["dynamics"] = df_dynamics["balance"].diff().fillna(0)
+                
+                # Для поступлений и списаний за каждый месяц
+                ip_ops = st.session_state.ip_operations
+                
+                if not ip_ops.empty:
+                    # Копируем и создаем колонку с месяцем
+                    ops = ip_ops.copy()
+                    ops["month_period"] = ops["date"].dt.to_period("M").dt.strftime("%b'%y")
+                    
+                    # Группируем по месяцу: поступления (amount > 0) и списания (amount < 0)
+                    monthly_income = ops[ops["amount"] > 0].groupby("month_period")["amount"].sum()
+                    monthly_expense = ops[ops["amount"] < 0].groupby("month_period")["amount"].sum()
+                    
+                    # Создаем таблицу с месяцами по горизонтали
+                    months = df_dynamics["month_short"].tolist()
+                    
+                    # Формируем данные для таблицы
+                    table_data = {
+                        "Показатель": [
+                            "Начальный остаток, млн ₽",
+                            "Конечный остаток, млн ₽",
+                            "Динамика, млн ₽",
+                            "───────────",  # ← разделительная черта
+                            "Поступления, млн ₽",
+                            "Списания, млн ₽"
+                        ]
+                    }
+                    
+                    for month in months:
+                        # Находим данные для этого месяца
+                        row = df_dynamics[df_dynamics["month_short"] == month]
+                        
+                        if not row.empty:
+                            balance = row["balance"].iloc[0] / 1_000_000  # переводим в млн
+                            dynamics = row["dynamics"].iloc[0] / 1_000_000
+                            
+                            # Поступления и списания за этот месяц
+                            income = monthly_income.get(month, 0) / 1_000_000
+                            expense = monthly_expense.get(month, 0) / 1_000_000
+                        else:
+                            balance = 0
+                            dynamics = 0
+                            income = 0
+                            expense = 0
+                        
+                        # Начальный остаток для этого месяца
+                        # Для первого месяца берем start_balance, для остальных - остаток на начало месяца
+                        if month == months[0]:
+                            start_bal = start_balance / 1_000_000
+                        else:
+                            # Берем остаток из предыдущего месяца
+                            prev_row = df_dynamics[df_dynamics["month_short"] == month].index
+                            if len(prev_row) > 0:
+                                idx = prev_row[0]
+                                if idx > 0:
+                                    start_bal = df_dynamics.iloc[idx - 1]["balance"] / 1_000_000
+                                else:
+                                    start_bal = start_balance / 1_000_000
+                            else:
+                                start_bal = 0
+                        
+                        # Форматируем значения с одним знаком после запятой
+                        table_data[month] = [
+                            f"{start_bal:.2f}",
+                            f"{balance:.2f}",
+                            f"{dynamics:+.2f}",
+                            "─",  # ← разделительная черта
+                            f"{income:+.2f}",
+                            f"{expense:+.2f}"
+                        ]
+                    
+                    # Создаем DataFrame для отображения
+                    df_table = pd.DataFrame(table_data)
+                    
+                    # Убираем индекс и показываем
+                    st.dataframe(
+                        df_table,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.info("Нет данных для отображения динамики ИП")
             else:
                 st.info("Нет данных для отображения динамики ИП")
         
