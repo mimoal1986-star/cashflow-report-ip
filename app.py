@@ -50,20 +50,28 @@ with col2:
 
 # Кнопка обработки
 if st.button("🔄 Обработать файлы", type="primary"):
-    if file_ip and file_phys:
+    if file_ip or file_phys:  # ← было: if file_ip and file_phys
         try:
             with st.spinner("Обработка файлов..."):
-                # Парсим файлы
-                st.session_state.ip_operations = IPParser.parse(file_ip)
-                st.session_state.phys_operations = PhysParser.parse(file_phys)
+                # Парсим только загруженные файлы
+                if file_ip:
+                    st.session_state.ip_operations = IPParser.parse(file_ip)
+                else:
+                    st.session_state.ip_operations = pd.DataFrame()  # пустой DataFrame
                 
-                # Валидация данных
-                DataValidator.validate_operations(st.session_state.ip_operations)
-                DataValidator.validate_operations(st.session_state.phys_operations)
-                DataValidator.validate_duplicates(st.session_state.ip_operations)
-                DataValidator.validate_duplicates(st.session_state.phys_operations)
-                DataValidator.validate_amounts(st.session_state.ip_operations)
-                DataValidator.validate_amounts(st.session_state.phys_operations)
+                if file_phys:
+                    st.session_state.phys_operations = PhysParser.parse(file_phys)
+                else:
+                    st.session_state.phys_operations = pd.DataFrame()  # пустой DataFrame
+                
+                # Валидация данных (только для непустых DataFrame)
+                if not st.session_state.ip_operations.empty:
+                    DataValidator.validate_duplicates(st.session_state.ip_operations)
+                    DataValidator.validate_amounts(st.session_state.ip_operations)
+                
+                if not st.session_state.phys_operations.empty:
+                    DataValidator.validate_duplicates(st.session_state.phys_operations)
+                    DataValidator.validate_amounts(st.session_state.phys_operations)
                 
                 st.session_state.data_loaded = True
                 
@@ -72,12 +80,20 @@ if st.button("🔄 Обработать файлы", type="primary"):
                 # Показываем статистику
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Операций ИП", len(st.session_state.ip_operations))
+                    count_ip = len(st.session_state.ip_operations) if not st.session_state.ip_operations.empty else 0
+                    st.metric("Операций ИП", count_ip)
                 with col2:
-                    st.metric("Операций физлица", len(st.session_state.phys_operations))
+                    count_phys = len(st.session_state.phys_operations) if not st.session_state.phys_operations.empty else 0
+                    st.metric("Операций физлица", count_phys)
                 with col3:
-                    total = len(st.session_state.ip_operations) + len(st.session_state.phys_operations)
+                    total = count_ip + count_phys
                     st.metric("Всего операций", total)
+                
+                # Предупреждение если загружен только 1 файл
+                if file_ip and not file_phys:
+                    st.info("ℹ️ Загружена только выписка ИП. Отчет будет сформирован только по ИП.")
+                elif file_phys and not file_ip:
+                    st.info("ℹ️ Загружена только выписка физлица. Отчет будет сформирован только по физлицу.")
                 
         except ParserError as e:
             st.error(f"❌ Ошибка при обработке: {str(e)}")
@@ -89,24 +105,43 @@ if st.button("🔄 Обработать файлы", type="primary"):
             st.error(f"❌ Непредвиденная ошибка: {str(e)}")
             st.session_state.data_loaded = False
     else:
-        st.warning("⚠️ Загрузите оба файла перед обработкой")
+        st.warning("⚠️ Загрузите хотя бы один файл для обработки")
 
 # -------------------------------
 # Основной функционал
 # -------------------------------
 if st.session_state.data_loaded and \
-   st.session_state.ip_operations is not None and \
-   st.session_state.phys_operations is not None:
+   (st.session_state.ip_operations is not None or \
+    st.session_state.phys_operations is not None):
     
-    # Определяем диапазон дат
+    # Проверяем, что есть данные хотя бы в одном файле
+    ip_empty = st.session_state.ip_operations.empty if st.session_state.ip_operations is not None else True
+    phys_empty = st.session_state.phys_operations.empty if st.session_state.phys_operations is not None else True
+    
+    if ip_empty and phys_empty:
+        st.warning("⚠️ Нет данных для формирования отчета")
+        st.stop()
+    
+    # Определяем диапазон дат (из доступных данных)
     try:
-        min_date, max_date = get_date_range(
-            st.session_state.ip_operations,
-            st.session_state.phys_operations
-        )
+        # Собираем все доступные даты
+        all_dates = []
+        if not ip_empty:
+            all_dates.extend(st.session_state.ip_operations["date"].tolist())
+        if not phys_empty:
+            all_dates.extend(st.session_state.phys_operations["date"].tolist())
+        
+        if all_dates:
+            min_date = min(all_dates)
+            max_date = max(all_dates)
+        else:
+            st.warning("⚠️ Нет данных с датами")
+            st.stop()
+            
     except Exception as e:
         st.error(f"❌ Ошибка определения диапазона дат: {str(e)}")
         st.stop()
+        
     
     st.subheader("📅 Настройка периода отчета")
     
