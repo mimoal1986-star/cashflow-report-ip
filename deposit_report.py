@@ -91,7 +91,7 @@ class DepositReportGenerator:
             deposit_amount = placement["credit"].max() if not placement.empty and "credit" in placement.columns else 0.0
             # Если нет колонки credit, используем amount (сумма должна быть положительной)
             if deposit_amount == 0.0 and not placement.empty:
-                deposit_amount = placement["amount"].max()
+                deposit_amount = abs(placement["amount"].max())
             
             # Процент депозита (сумма всех процентов)
             interest_amount = interests["amount"].sum() if not interests.empty else 0.0
