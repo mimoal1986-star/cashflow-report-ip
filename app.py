@@ -280,44 +280,46 @@ if st.session_state.data_loaded and \
         with col1:
             st.metric(
                 "🏢 Начальный остаток ИП",
-                f"{ip_report.start_balance:,.2f} ₽"
+                f"{ip_report.start_balance / 1_000_000:.2f} млн ₽"
             )
         
         with col2:
             st.metric(
                 "🏢 Конечный остаток ИП",
-                f"{ip_report.end_balance:,.2f} ₽",
-                delta=f"{ip_report.end_balance - ip_report.start_balance:,.2f} ₽"
+                f"{ip_report.end_balance / 1_000_000:.2f} млн ₽",
+                delta=f"{(ip_report.end_balance - ip_report.start_balance) / 1_000_000:+.2f} млн ₽"
             )
         
         with col3:
             st.metric(
-                "🏦 Их них на депозите",
-                f"{ip_on_deposit:,.2f} ₽"
+                "🏦 Из них на депозите",
+                f"{ip_on_deposit / 1_000_000:.2f} млн ₽"
             )
         
         with col4:
             st.metric(
                 "👤 Начальный остаток физлица",
-                f"{phys_report.start_balance:,.2f} ₽"
+                f"{phys_report.start_balance / 1_000_000:.2f} млн ₽"
             )
         
         with col5:
             st.metric(
                 "👤 Конечный остаток физлица",
-                f"{phys_report.end_balance:,.2f} ₽",
-                delta=f"{phys_report.end_balance - phys_report.start_balance:,.2f} ₽"
+                f"{phys_report.end_balance / 1_000_000:.2f} млн ₽",
+                delta=f"{(phys_report.end_balance - phys_report.start_balance) / 1_000_000:+.2f} млн ₽"
             )
         
         with col6:
             st.metric(
                 "🏦 Из них на вкладе",
-                f"{phys_on_deposit:,.2f} ₽"
+                f"{phys_on_deposit / 1_000_000:.2f} млн ₽"
             )
         
-        total_start = ip_report.start_balance + phys_report.start_balance
-        total_end = ip_report.end_balance + phys_report.end_balance
-        st.info(f"💰 **Общий остаток:** {total_start:,.2f} ₽ → {total_end:,.2f} ₽ (изменение: {total_end - total_start:,.2f} ₽)")
+        # Общий остаток тоже в млн ₽
+        total_start = (ip_report.start_balance + phys_report.start_balance) / 1_000_000
+        total_end = (ip_report.end_balance + phys_report.end_balance) / 1_000_000
+        st.info(f"💰 **Общий остаток:** {total_start:.2f} млн ₽ → {total_end:.2f} млн ₽ (изменение: {total_end - total_start:+.2f} млн ₽)")
+
         
         # ✅ Все три вкладки создаются вместе
         tab1, tab2, tab3 = st.tabs(["📊 Динамика ИП", "📊 Динамика физлица", "🏦 Депозиты"])
