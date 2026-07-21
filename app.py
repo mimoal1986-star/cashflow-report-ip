@@ -298,11 +298,10 @@ if st.session_state.data_loaded and \
             else:
                 st.info("Нет данных для отображения динамики физлица")
         
-        # ✅ ИСПРАВЛЕНО: Вкладка с депозитами теперь внутри правильного блока
+        # Вкладка с депозитами
         with tab3:
             st.header("🏦 Отчет по депозитам")
             
-            # ✅ ИСПРАВЛЕНО: Проверка на None
             if st.session_state.ip_operations is not None and not st.session_state.ip_operations.empty:
                 deposit_ops = st.session_state.ip_operations.attrs.get("deposits", pd.DataFrame())
                 
@@ -313,13 +312,26 @@ if st.session_state.data_loaded and \
                     
                     if deposit_report.empty:
                         st.info("ℹ️ Не найдены депозитные операции с номерами сделок")
-                    else:                        
+                    else:
+                        # ✅ НОВЫЙ БЛОК - Активные депозиты
+                        active_deposits = deposit_report[deposit_report["Дата завершения"].isna()]
+                        active_count = len(active_deposits)
+                        active_amount = active_deposits["Сумма депозита (руб)"].sum() if not active_deposits.empty else 0.0
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("📌 Кол-во депозитов активно (шт)", active_count)
+                        with col2:
+                            st.metric("💰 Общая сумма рублей на активных депозитах (руб)", f"{active_amount:,.2f} ₽")
+                        
+                        # Таблица
                         st.dataframe(
                             deposit_report,
                             use_container_width=True,
                             hide_index=True
                         )
                         
+                        # Кнопка скачивания
                         excel_file = export_deposit_report_to_excel(deposit_report, st.session_state.ip_operations)
                         st.download_button(
                             label="📥 Скачать депозитный отчет Excel",
