@@ -5,7 +5,7 @@ from datetime import datetime
 from parsers import IPParser, ParserError
 from calculators import BalanceCalculator
 from data_validators import DataValidator
-from helpers import create_excel_report, export_deposit_report_to_excel
+from helpers import create_excel_report
 from deposit_report import DepositReportGenerator
 
 # Настройка страницы
@@ -346,20 +346,11 @@ if st.session_state.data_loaded and st.session_state.ip_operations is not None:
                                 use_container_width=True,
                                 hide_index=True
                             )
-                            
-                            excel_file = export_deposit_report_to_excel(deposit_report, st.session_state.ip_operations)
-                            st.download_button(
-                                label="📥 Скачать депозитный отчет Excel",
-                                data=excel_file,
-                                file_name=f"Депозитный_отчет_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                key="download_deposits"
-                            )
             else:
                 st.info("ℹ️ Нет данных ИП для формирования депозитного отчета")
         
         # ============================================
-        # КНОПКА СКАЧИВАНИЯ ОСНОВНОГО ОТЧЕТА
+        # КНОПКА СКАЧИВАНИЯ ОТЧЕТА (единый файл)
         # ============================================
         if st.session_state.excel_data is not None:
             st.download_button(
