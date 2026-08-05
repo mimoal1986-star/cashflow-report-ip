@@ -1,6 +1,7 @@
 import pandas as pd
 from datetime import datetime
 import io
+from openpyxl.styles import numbers
 from models import BalanceReport, BalanceReportFL
 from deposit_report import DepositReportGenerator
 
@@ -27,11 +28,9 @@ def excel_date(date_val) -> int:
     if pd.isna(date_val) or date_val == "":
         return None
     
-    # Если уже datetime
     if isinstance(date_val, (pd.Timestamp, datetime)):
         return (date_val - pd.Timestamp("1899-12-30")).days
     
-    # Если строка
     if isinstance(date_val, str):
         date_val = date_val.strip()
         try:
@@ -45,6 +44,18 @@ def excel_date(date_val) -> int:
             return None
     
     return None
+
+def apply_number_format(worksheet, col_letter, start_row=2, format_str='# ##0.00'):
+    """Применяет числовой формат к колонке"""
+    for row in range(start_row, worksheet.max_row + 1):
+        cell = worksheet[f"{col_letter}{row}"]
+        cell.number_format = format_str
+
+def apply_date_format(worksheet, col_letter, start_row=2):
+    """Применяет формат даты к колонке"""
+    for row in range(start_row, worksheet.max_row + 1):
+        cell = worksheet[f"{col_letter}{row}"]
+        cell.number_format = 'DD.MM.YYYY'
 
 # ============================================
 # ЭКСПОРТ В EXCEL
@@ -79,10 +90,18 @@ def create_excel_report(
             df_dynamics = df_dynamics.rename(columns={"month": "Месяц"})
             
             result_df = df_dynamics[["Месяц", "Баланс начало месяца", "Баланс конец месяца"]].copy()
-            result_df["Баланс начало месяца"] = result_df["Баланс начало месяца"].apply(format_number)
-            result_df["Баланс конец месяца"] = result_df["Баланс конец месяца"].apply(format_number)
+            # Сохраняем как числа (без форматирования текстом)
+            result_df["Баланс начало месяца"] = result_df["Баланс начало месяца"]
+            result_df["Баланс конец месяца"] = result_df["Баланс конец месяца"]
             
             result_df.to_excel(writer, sheet_name="ИП_Динамика", index=False)
+            
+            # Применяем числовой формат к колонкам B и C
+            worksheet = writer.sheets["ИП_Динамика"]
+            for col in ['B', 'C']:
+                for row in range(2, worksheet.max_row + 1):
+                    cell = worksheet[f"{col}{row}"]
+                    cell.number_format = '# ##0.00'
         
         # ============================================
         # ИП_Операции
@@ -91,13 +110,24 @@ def create_excel_report(
             ops_df = ip_operations.copy()
             
             ops_df["Дата"] = ops_df["date"].apply(excel_date)
-            ops_df["Дебет"] = ops_df["debit"].apply(lambda x: format_number(x) if x != 0 else "")
-            ops_df["Кредит"] = ops_df["credit"].apply(lambda x: format_number(x) if x != 0 else "")
-            ops_df["Итого"] = ops_df["amount"].apply(lambda x: format_number(x, with_sign=True))
+            ops_df["Дебет"] = ops_df["debit"]
+            ops_df["Кредит"] = ops_df["credit"]
+            ops_df["Итого"] = ops_df["amount"]
             ops_df["Описание"] = ops_df["description"]
             
             result_ops = ops_df[["Дата", "Дебет", "Кредит", "Итого", "Описание"]].copy()
             result_ops.to_excel(writer, sheet_name="ИП_Операции", index=False)
+            
+            worksheet = writer.sheets["ИП_Операции"]
+            # Дата — формат даты
+            for row in range(2, worksheet.max_row + 1):
+                cell = worksheet[f"A{row}"]
+                cell.number_format = 'DD.MM.YYYY'
+            # Числа — числовой формат
+            for col in ['B', 'C', 'D']:
+                for row in range(2, worksheet.max_row + 1):
+                    cell = worksheet[f"{col}{row}"]
+                    cell.number_format = '# ##0.00'
         
         # ============================================
         # Депозиты_Динамика
@@ -121,10 +151,23 @@ def create_excel_report(
                             lambda x: excel_date(x) if pd.notna(x) else ""
                         )
                     
-                    deposit_report_copy["Сумма депозита (руб)"] = deposit_report_copy["Сумма депозита (руб)"].apply(format_number)
-                    deposit_report_copy["Процент депозита (руб)"] = deposit_report_copy["Процент депозита (руб)"].apply(format_number)
+                    deposit_report_copy["Сумма депозита (руб)"] = deposit_report_copy["Сумма депозита (руб)"]
+                    deposit_report_copy["Процент депозита (руб)"] = deposit_report_copy["Процент депозита (руб)"]
                     
                     deposit_report_copy.to_excel(writer, sheet_name="Депозиты_Динамика", index=False)
+                    
+                    worksheet = writer.sheets["Депозиты_Динамика"]
+                    # Даты
+                    for col in ['B', 'C']:
+                        for row in range(2, worksheet.max_row + 1):
+                            cell = worksheet[f"{col}{row}"]
+                            if cell.value:
+                                cell.number_format = 'DD.MM.YYYY'
+                    # Числа
+                    for col in ['D', 'E']:
+                        for row in range(2, worksheet.max_row + 1):
+                            cell = worksheet[f"{col}{row}"]
+                            cell.number_format = '# ##0.00'
         
         # ============================================
         # Депозиты_Операции
@@ -138,13 +181,24 @@ def create_excel_report(
                 from deposit_report import DepositReportGenerator as DRG
                 detail_df["Номер сделки"] = detail_df["description"].apply(DRG.extract_deal_number)
                 detail_df["Дата"] = detail_df["date"].apply(excel_date)
-                detail_df["Сумма"] = detail_df["amount"].apply(format_number)
+                detail_df["Сумма"] = detail_df["amount"]
                 detail_df["Назначение платежа"] = detail_df["description"]
                 
                 result_detail = detail_df[["Номер сделки", "Дата", "Сумма", "Назначение платежа"]].copy()
                 result_detail = result_detail.dropna(subset=["Номер сделки"])
                 
                 result_detail.to_excel(writer, sheet_name="Депозиты_Операции", index=False)
+                
+                worksheet = writer.sheets["Депозиты_Операции"]
+                # Дата
+                for row in range(2, worksheet.max_row + 1):
+                    cell = worksheet[f"B{row}"]
+                    if cell.value:
+                        cell.number_format = 'DD.MM.YYYY'
+                # Сумма
+                for row in range(2, worksheet.max_row + 1):
+                    cell = worksheet[f"C{row}"]
+                    cell.number_format = '# ##0.00'
         
         # ============================================
         # ФЛ_Динамика
@@ -165,10 +219,13 @@ def create_excel_report(
             df_fl_dynamics = df_fl_dynamics.rename(columns={"month": "Месяц"})
             
             result_df = df_fl_dynamics[["Месяц", "Баланс начало месяца", "Баланс конец месяца"]].copy()
-            result_df["Баланс начало месяца"] = result_df["Баланс начало месяца"].apply(format_number)
-            result_df["Баланс конец месяца"] = result_df["Баланс конец месяца"].apply(format_number)
-            
             result_df.to_excel(writer, sheet_name="ФЛ_Динамика", index=False)
+            
+            worksheet = writer.sheets["ФЛ_Динамика"]
+            for col in ['B', 'C']:
+                for row in range(2, worksheet.max_row + 1):
+                    cell = worksheet[f"{col}{row}"]
+                    cell.number_format = '# ##0.00'
         else:
             empty_df = pd.DataFrame({"Сообщение": ["Нет данных для динамики ФЛ"]})
             empty_df.to_excel(writer, sheet_name="ФЛ_Динамика", index=False)
@@ -181,13 +238,24 @@ def create_excel_report(
             
             fl_ops["Дата"] = fl_ops["date"].apply(excel_date)
             fl_ops["Описание"] = fl_ops["description"]
-            fl_ops["Сумма"] = fl_ops["amount"].apply(format_number)
+            fl_ops["Сумма"] = fl_ops["amount"]
             fl_ops["Счет"] = fl_ops["account_name"] if "account_name" in fl_ops.columns else ""
             fl_ops["Тип"] = fl_ops["type"] if "type" in fl_ops.columns else ""
             fl_ops["Категория"] = fl_ops["category"] if "category" in fl_ops.columns else ""
             
             result_fl = fl_ops[["Дата", "Описание", "Сумма", "Счет", "Тип", "Категория"]].copy()
             result_fl.to_excel(writer, sheet_name="ФЛ_Операции", index=False)
+            
+            worksheet = writer.sheets["ФЛ_Операции"]
+            # Дата
+            for row in range(2, worksheet.max_row + 1):
+                cell = worksheet[f"A{row}"]
+                if cell.value:
+                    cell.number_format = 'DD.MM.YYYY'
+            # Сумма
+            for row in range(2, worksheet.max_row + 1):
+                cell = worksheet[f"C{row}"]
+                cell.number_format = '# ##0.00'
         else:
             empty_df = pd.DataFrame({"Сообщение": ["Нет данных по операциям ФЛ"]})
             empty_df.to_excel(writer, sheet_name="ФЛ_Операции", index=False)
@@ -210,9 +278,13 @@ def create_excel_report(
                     "balance": "Остаток на конец месяца",
                     "interest": "Выплата процентов"
                 })
-                combined_df["Остаток на конец месяца"] = combined_df["Остаток на конец месяца"].apply(format_number)
-                combined_df["Выплата процентов"] = combined_df["Выплата процентов"].apply(format_number)
                 combined_df.to_excel(writer, sheet_name="ФЛ_Вклады", index=False)
+                
+                worksheet = writer.sheets["ФЛ_Вклады"]
+                for col in ['C', 'D']:
+                    for row in range(2, worksheet.max_row + 1):
+                        cell = worksheet[f"{col}{row}"]
+                        cell.number_format = '# ##0.00'
             else:
                 empty_df = pd.DataFrame({"Сообщение": ["Нет данных по вкладам ФЛ"]})
                 empty_df.to_excel(writer, sheet_name="ФЛ_Вклады", index=False)
@@ -230,12 +302,23 @@ def create_excel_report(
             if not fl_deposit_ops.empty:
                 fl_deposit_ops["Дата"] = fl_deposit_ops["date"].apply(excel_date)
                 fl_deposit_ops["Описание"] = fl_deposit_ops["description"]
-                fl_deposit_ops["Сумма"] = fl_deposit_ops["amount"].apply(format_number)
+                fl_deposit_ops["Сумма"] = fl_deposit_ops["amount"]
                 fl_deposit_ops["Счет"] = fl_deposit_ops["account_name"]
                 fl_deposit_ops["Тип"] = fl_deposit_ops["type"] if "type" in fl_deposit_ops.columns else ""
                 
                 result_deposit_ops = fl_deposit_ops[["Дата", "Описание", "Сумма", "Счет", "Тип"]].copy()
                 result_deposit_ops.to_excel(writer, sheet_name="ФЛ_Вклады_Операции", index=False)
+                
+                worksheet = writer.sheets["ФЛ_Вклады_Операции"]
+                # Дата
+                for row in range(2, worksheet.max_row + 1):
+                    cell = worksheet[f"A{row}"]
+                    if cell.value:
+                        cell.number_format = 'DD.MM.YYYY'
+                # Сумма
+                for row in range(2, worksheet.max_row + 1):
+                    cell = worksheet[f"C{row}"]
+                    cell.number_format = '# ##0.00'
             else:
                 empty_df = pd.DataFrame({"Сообщение": ["Нет операций по вкладам ФЛ"]})
                 empty_df.to_excel(writer, sheet_name="ФЛ_Вклады_Операции", index=False)
