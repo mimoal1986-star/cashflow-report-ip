@@ -208,8 +208,8 @@ if st.session_state.data_loaded:
                 else:
                     st.session_state.ip_report = None
                 
-                # Расчет ФЛ (пока пустой)
-                if has_fl:
+                # Расчет ФЛ
+                if has_fl and not fl_error:
                     st.session_state.fl_report = BalanceCalculatorFL.calculate(
                         st.session_state.fl_operations,
                         pd.Timestamp(start_date),
@@ -403,14 +403,14 @@ if st.session_state.data_loaded:
                     st.info("ℹ️ Нет данных ИП для формирования депозитного отчета")
         
         # ============================================
-        # БЛОК ФЛ (пока пустой)
+        # БЛОК ФЛ
         # ============================================
         if st.session_state.fl_report is not None:
             fl_report = st.session_state.fl_report
             
             st.subheader("👤 Отчет по физлицу")
             
-            # Метрики ФЛ (пока пустые)
+            # Метрики ФЛ
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric(
@@ -426,17 +426,110 @@ if st.session_state.data_loaded:
             with col3:
                 st.metric(
                     "🏦 Из них на вкладе",
-                    f"0.00 млн ₽"
+                    f"{fl_report.deposits_on_end / 1_000_000:.2f} млн ₽"
                 )
             
-            # Вкладки ФЛ (пока пустые)
+            # Вкладки ФЛ
             tab1_fl, tab2_fl = st.tabs(["📊 Динамика ФЛ", "🏦 Вклады"])
             
             with tab1_fl:
-                st.info("ℹ️ Расчет динамики ФЛ будет добавлен позже")
+                st.subheader("Динамика остатка ФЛ помесячно")
+                if not fl_report.monthly_dynamics.empty:
+                    df_dynamics = fl_report.monthly_dynamics.copy()
+                    df_dynamics["month_short"] = pd.to_datetime(
+                        df_dynamics["month"], format="%B %Y"
+                    ).dt.strftime("%b'%y")
+                    
+                    start_balance = df_dynamics["balance"].iloc[0] if not df_dynamics.empty else 0
+                    df_dynamics["dynamics"] = df_dynamics["balance"].diff().fillna(0)
+                    
+                    # Для поступлений и списаний по ФЛ (только Текущий счет)
+                    fl_ops = st.session_state.fl_operations
+                    if not fl_ops.empty:
+                        ops = fl_ops[fl_ops["account_name"] == "Текущий счёт"].copy()
+                        ops["month_period"] = ops["date"].dt.to_period("M").dt.strftime("%b'%y")
+                        
+                        monthly_income = ops[ops["amount"] > 0].groupby("month_period")["amount"].sum()
+                        monthly_expense = ops[ops["amount"] < 0].groupby("month_period")["amount"].sum()
+                        
+                        months = df_dynamics["month_short"].tolist()
+                        
+                        table_data = {
+                            "Показатель": [
+                                "Начальный остаток, млн ₽",
+                                "Конечный остаток, млн ₽",
+                                "Динамика, млн ₽",
+                                "Поступления, млн ₽",
+                                "Списания, млн ₽"
+                            ]
+                        }
+                        
+                        for month in months:
+                            row = df_dynamics[df_dynamics["month_short"] == month]
+                            if not row.empty:
+                                balance = row["balance"].iloc[0] / 1_000_000
+                                dynamics = row["dynamics"].iloc[0] / 1_000_000
+                                income = monthly_income.get(month, 0) / 1_000_000
+                                expense = monthly_expense.get(month, 0) / 1_000_000
+                            else:
+                                balance = 0
+                                dynamics = 0
+                                income = 0
+                                expense = 0
+                            
+                            if month == months[0]:
+                                start_bal = start_balance / 1_000_000
+                            else:
+                                prev_idx = df_dynamics[df_dynamics["month_short"] == month].index
+                                if len(prev_idx) > 0:
+                                    idx = prev_idx[0]
+                                    if idx > 0:
+                                        start_bal = df_dynamics.iloc[idx - 1]["balance"] / 1_000_000
+                                    else:
+                                        start_bal = start_balance / 1_000_000
+                                else:
+                                    start_bal = 0
+                            
+                            table_data[month] = [
+                                f"{start_bal:.2f}",
+                                f"{balance:.2f}",
+                                f"{dynamics:+.2f}",
+                                f"{income:+.2f}",
+                                f"{expense:+.2f}"
+                            ]
+                        
+                        df_table = pd.DataFrame(table_data)
+                        styled_df = df_table.style.hide(axis="index").set_properties(
+                            **{'border-bottom': '2px solid #cccccc'}, 
+                            subset=pd.IndexSlice[2, :]
+                        )
+                        st.dataframe(styled_df, use_container_width=True)
+                    else:
+                        st.info("Нет данных для отображения динамики ФЛ")
+                else:
+                    st.info("Нет данных для отображения динамики ФЛ")
             
             with tab2_fl:
-                st.info("ℹ️ Отчет по вкладам ФЛ будет добавлен позже")
+                st.subheader("🏦 Отчет по вкладам ФЛ")
+                
+                if fl_report.deposits_data:
+                    for deposit_item in fl_report.deposits_data:
+                        df_dep = deposit_item["data"].copy()
+                        if not df_dep.empty:
+                            df_dep["month"] = pd.to_datetime(df_dep["month"], format="%B %Y").dt.strftime("%b'%y")
+                            df_dep = df_dep.rename(columns={
+                                "month": "Месяц",
+                                "balance": "Остаток на конец месяца",
+                                "interest": "Выплата процентов"
+                            })
+                            st.subheader(f"📊 {deposit_item['account_name']}")
+                            st.dataframe(
+                                df_dep,
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                else:
+                    st.info("ℹ️ Нет данных по вкладам ФЛ")
         
         # ============================================
         # КНОПКА СКАЧИВАНИЯ
@@ -478,5 +571,5 @@ with st.expander("ℹ️ Информация о проекте"):
     
     ### Важные замечания:
     - Все суммы отображаются в млн ₽
-    - Расчет ФЛ пока в разработке
+    - По ФЛ: Текущий счёт — основной, Альфа-Счёт... — вклады
     """)
