@@ -37,8 +37,13 @@ def create_excel_report(
             df_dynamics = df_dynamics.rename(columns={"month": "Месяц"})
             
             result_df = df_dynamics[["Месяц", "Баланс начало месяца", "Баланс конец месяца"]].copy()
-            result_df["Баланс начало месяца"] = result_df["Баланс начало месяца"].apply(lambda x: f"{x:,.2f}")
-            result_df["Баланс конец месяца"] = result_df["Баланс конец месяца"].apply(lambda x: f"{x:,.2f}")
+            # Формат: 7269017,22 (без разделителей тысяч, запятая как разделитель)
+            result_df["Баланс начало месяца"] = result_df["Баланс начало месяца"].apply(
+                lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
+            result_df["Баланс конец месяца"] = result_df["Баланс конец месяца"].apply(
+                lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
             
             result_df.to_excel(writer, sheet_name="ИП_Динамика", index=False)
         
@@ -48,10 +53,19 @@ def create_excel_report(
         if ip_operations is not None and not ip_operations.empty:
             ops_df = ip_operations.copy()
             
-            ops_df["Дата"] = ops_df["date"].dt.strftime("%d.%m.%Y")
-            ops_df["Дебет"] = ops_df["debit"].apply(lambda x: f"{x:,.2f}" if x != 0 else "")
-            ops_df["Кредит"] = ops_df["credit"].apply(lambda x: f"{x:,.2f}" if x != 0 else "")
-            ops_df["Итого"] = ops_df["amount"].apply(lambda x: f"{x:+,.2f}")
+            # Дата в числовом формате Excel
+            ops_df["Дата"] = pd.to_datetime(ops_df["date"]).apply(lambda x: x.toordinal() + 693594)
+            
+            # Формат чисел: 7269017,22
+            ops_df["Дебет"] = ops_df["debit"].apply(
+                lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if x != 0 else ""
+            )
+            ops_df["Кредит"] = ops_df["credit"].apply(
+                lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if x != 0 else ""
+            )
+            ops_df["Итого"] = ops_df["amount"].apply(
+                lambda x: f"{x:+,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
             ops_df["Описание"] = ops_df["description"]
             
             result_ops = ops_df[["Дата", "Дебет", "Кредит", "Итого", "Описание"]].copy()
@@ -69,24 +83,24 @@ def create_excel_report(
                 if not deposit_report.empty:
                     deposit_report_copy = deposit_report.copy()
                     
+                    # Даты в числовом формате Excel
                     if "Дата начала" in deposit_report_copy.columns:
-                        deposit_report_copy["Дата начала"] = deposit_report_copy["Дата начала"].apply(
-                            lambda x: x.strftime("%d.%m.%Y") if pd.notna(x) else ""
-                        )
+                        deposit_report_copy["Дата начала"] = pd.to_datetime(
+                            deposit_report_copy["Дата начала"], errors="coerce"
+                        ).apply(lambda x: x.toordinal() + 693594 if pd.notna(x) else "")
                     
                     if "Дата завершения" in deposit_report_copy.columns:
-                        deposit_report_copy["Дата завершения"] = deposit_report_copy["Дата завершения"].apply(
-                            lambda x: x.strftime("%d.%m.%Y") if pd.notna(x) else ""
-                        )
+                        deposit_report_copy["Дата завершения"] = pd.to_datetime(
+                            deposit_report_copy["Дата завершения"], errors="coerce"
+                        ).apply(lambda x: x.toordinal() + 693594 if pd.notna(x) else "")
                     
-                    deposit_report_copy = deposit_report_copy.rename(columns={
-                        "Номер сделки": "Номер сделки",
-                        "Дата начала": "Дата начала",
-                        "Дата завершения": "Дата завершения",
-                        "Сумма депозита (руб)": "Сумма депозита (руб)",
-                        "Процент депозита (руб)": "Процент депозита (руб)",
-                        "Дней": "Дней"
-                    })
+                    # Формат чисел
+                    deposit_report_copy["Сумма депозита (руб)"] = deposit_report_copy["Сумма депозита (руб)"].apply(
+                        lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if x else ""
+                    )
+                    deposit_report_copy["Процент депозита (руб)"] = deposit_report_copy["Процент депозита (руб)"].apply(
+                        lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if x else ""
+                    )
                     
                     deposit_report_copy.to_excel(writer, sheet_name="Депозиты_Динамика", index=False)
         
@@ -101,8 +115,14 @@ def create_excel_report(
                 
                 from deposit_report import DepositReportGenerator as DRG
                 detail_df["Номер сделки"] = detail_df["description"].apply(DRG.extract_deal_number)
-                detail_df["Дата"] = detail_df["date"].dt.strftime("%d.%m.%Y")
-                detail_df["Сумма"] = detail_df["amount"].apply(lambda x: f"{x:,.2f}")
+                
+                # Дата в числовом формате Excel
+                detail_df["Дата"] = pd.to_datetime(detail_df["date"]).apply(lambda x: x.toordinal() + 693594)
+                
+                # Формат чисел
+                detail_df["Сумма"] = detail_df["amount"].apply(
+                    lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                )
                 detail_df["Назначение платежа"] = detail_df["description"]
                 
                 result_detail = detail_df[["Номер сделки", "Дата", "Сумма", "Назначение платежа"]].copy()
@@ -129,8 +149,12 @@ def create_excel_report(
             df_fl_dynamics = df_fl_dynamics.rename(columns={"month": "Месяц"})
             
             result_df = df_fl_dynamics[["Месяц", "Баланс начало месяца", "Баланс конец месяца"]].copy()
-            result_df["Баланс начало месяца"] = result_df["Баланс начало месяца"].apply(lambda x: f"{x:,.2f}")
-            result_df["Баланс конец месяца"] = result_df["Баланс конец месяца"].apply(lambda x: f"{x:,.2f}")
+            result_df["Баланс начало месяца"] = result_df["Баланс начало месяца"].apply(
+                lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
+            result_df["Баланс конец месяца"] = result_df["Баланс конец месяца"].apply(
+                lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
             
             result_df.to_excel(writer, sheet_name="ФЛ_Динамика", index=False)
         else:
@@ -155,9 +179,12 @@ def create_excel_report(
                     "balance": "Остаток на конец месяца",
                     "interest": "Выплата процентов"
                 })
-                combined_df["Месяц"] = pd.to_datetime(combined_df["Месяц"], format="%B %Y").dt.strftime("%B %Y")
-                combined_df["Остаток на конец месяца"] = combined_df["Остаток на конец месяца"].apply(lambda x: f"{x:,.2f}")
-                combined_df["Выплата процентов"] = combined_df["Выплата процентов"].apply(lambda x: f"{x:,.2f}")
+                combined_df["Остаток на конец месяца"] = combined_df["Остаток на конец месяца"].apply(
+                    lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                )
+                combined_df["Выплата процентов"] = combined_df["Выплата процентов"].apply(
+                    lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                )
                 combined_df.to_excel(writer, sheet_name="ФЛ_Вклады", index=False)
             else:
                 empty_df = pd.DataFrame({"Сообщение": ["Нет данных по вкладам ФЛ"]})
@@ -165,6 +192,54 @@ def create_excel_report(
         else:
             empty_df = pd.DataFrame({"Сообщение": ["Нет данных по вкладам ФЛ"]})
             empty_df.to_excel(writer, sheet_name="ФЛ_Вклады", index=False)
+        
+        # ============================================
+        # ФЛ_Операции (НОВЫЙ ЛИСТ)
+        # ============================================
+        if fl_operations is not None and not fl_operations.empty:
+            fl_ops = fl_operations.copy()
+            
+            # Дата в числовом формате Excel
+            fl_ops["Дата"] = pd.to_datetime(fl_ops["date"]).apply(lambda x: x.toordinal() + 693594)
+            fl_ops["Описание"] = fl_ops["description"]
+            fl_ops["Сумма"] = fl_ops["amount"].apply(
+                lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
+            fl_ops["Счет"] = fl_ops["account_name"] if "account_name" in fl_ops.columns else ""
+            fl_ops["Тип"] = fl_ops["type"] if "type" in fl_ops.columns else ""
+            fl_ops["Категория"] = fl_ops["category"] if "category" in fl_ops.columns else ""
+            
+            result_fl = fl_ops[["Дата", "Описание", "Сумма", "Счет", "Тип", "Категория"]].copy()
+            result_fl.to_excel(writer, sheet_name="ФЛ_Операции", index=False)
+        else:
+            empty_df = pd.DataFrame({"Сообщение": ["Нет данных по операциям ФЛ"]})
+            empty_df.to_excel(writer, sheet_name="ФЛ_Операции", index=False)
+        
+        # ============================================
+        # ФЛ_Вклады_Операции (НОВЫЙ ЛИСТ)
+        # ============================================
+        if fl_operations is not None and not fl_operations.empty:
+            # Фильтруем только операции по вкладам
+            deposit_names = ["Альфа-Счёт на минимальный остаток", "Альфа-Счёт на ежедневный остаток"]
+            fl_deposit_ops = fl_operations[fl_operations["account_name"].isin(deposit_names)].copy()
+            
+            if not fl_deposit_ops.empty:
+                fl_deposit_ops["Дата"] = pd.to_datetime(fl_deposit_ops["date"]).apply(lambda x: x.toordinal() + 693594)
+                fl_deposit_ops["Описание"] = fl_deposit_ops["description"]
+                fl_deposit_ops["Сумма"] = fl_deposit_ops["amount"].apply(
+                    lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                )
+                fl_deposit_ops["Счет"] = fl_deposit_ops["account_name"]
+                fl_deposit_ops["Тип"] = fl_deposit_ops["type"] if "type" in fl_deposit_ops.columns else ""
+                
+                result_deposit_ops = fl_deposit_ops[["Дата", "Описание", "Сумма", "Счет", "Тип"]].copy()
+                result_deposit_ops.to_excel(writer, sheet_name="ФЛ_Вклады_Операции", index=False)
+            else:
+                empty_df = pd.DataFrame({"Сообщение": ["Нет операций по вкладам ФЛ"]})
+                empty_df.to_excel(writer, sheet_name="ФЛ_Вклады_Операции", index=False)
+        else:
+            empty_df = pd.DataFrame({"Сообщение": ["Нет данных по вкладам ФЛ"]})
+            empty_df.to_excel(writer, sheet_name="ФЛ_Вклады_Операции", index=False)
     
     output.seek(0)
     return output
