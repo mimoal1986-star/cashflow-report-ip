@@ -143,11 +143,6 @@ class IPParser(BaseParser):
         except Exception as e:
             raise ParserError(f"Ошибка при парсинге файла ИП: {str(e)}")
 
-
-# ============================================
-# НОВЫЙ ПАРСЕР ДЛЯ ФЛ
-# ============================================
-
 class FLParser(BaseParser):
     """Парсер выписки физлица"""
     
@@ -194,8 +189,15 @@ class FLParser(BaseParser):
                 date_str = df["Дата операции"].astype(str)
                 result_date = pd.to_datetime(date_str, format="%d.%m.%Y", errors="coerce")
             
+            # ============================================
             # Очищаем сумму (убираем пробелы, запятые)
+            # И добавляем знак в зависимости от типа
+            # ============================================
             amount_values = df["Сумма"].apply(BaseParser.clean_amount)
+            
+            # Если тип = "Списание", делаем сумму отрицательной
+            is_expense = df["Тип"].astype(str).str.lower() == "списание"
+            amount_values = amount_values.where(~is_expense, -amount_values)
             
             # Создаем результат
             result = pd.DataFrame()
@@ -227,6 +229,3 @@ class FLParser(BaseParser):
             raise
         except Exception as e:
             raise ParserError(f"Ошибка при парсинге файла ФЛ: {str(e)}")
-
-
-__all__ = ['IPParser', 'FLParser', 'ParserError']
