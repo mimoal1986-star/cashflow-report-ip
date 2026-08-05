@@ -5,7 +5,7 @@ from datetime import datetime
 from parsers import IPParser, FLParser, ParserError
 from calculators import BalanceCalculator, BalanceCalculatorFL
 from data_validators import DataValidator
-from helpers import create_excel_report, create_excel_report_fl
+from helpers import create_excel_report
 from deposit_report import DepositReportGenerator
 
 # Настройка страницы
