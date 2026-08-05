@@ -45,7 +45,7 @@ def excel_date(date_val) -> int:
     
     return None
 
-def apply_number_format(worksheet, col_letter, start_row=2, format_str='# ##0.00'):
+def apply_number_format(worksheet, col_letter, start_row=2, format_str='# ###0.00'):
     """Применяет числовой формат к колонке"""
     for row in range(start_row, worksheet.max_row + 1):
         cell = worksheet[f"{col_letter}{row}"]
@@ -101,7 +101,7 @@ def create_excel_report(
             for col in ['B', 'C']:
                 for row in range(2, worksheet.max_row + 1):
                     cell = worksheet[f"{col}{row}"]
-                    cell.number_format = '# ##0.00'
+                    cell.number_format = '# ###0.00'
         
         # ============================================
         # ИП_Операции
@@ -127,7 +127,7 @@ def create_excel_report(
             for col in ['B', 'C', 'D']:
                 for row in range(2, worksheet.max_row + 1):
                     cell = worksheet[f"{col}{row}"]
-                    cell.number_format = '# ##0.00'
+                    cell.number_format = '# ###0.00'
         
         # ============================================
         # Депозиты_Динамика
@@ -167,7 +167,7 @@ def create_excel_report(
                     for col in ['D', 'E']:
                         for row in range(2, worksheet.max_row + 1):
                             cell = worksheet[f"{col}{row}"]
-                            cell.number_format = '# ##0.00'
+                            cell.number_format = '# ###0.00'
         
         # ============================================
         # Депозиты_Операции
@@ -198,7 +198,7 @@ def create_excel_report(
                 # Сумма
                 for row in range(2, worksheet.max_row + 1):
                     cell = worksheet[f"C{row}"]
-                    cell.number_format = '# ##0.00'
+                    cell.number_format = '# ###0.00'
         
         # ============================================
         # ФЛ_Динамика
@@ -225,7 +225,7 @@ def create_excel_report(
             for col in ['B', 'C']:
                 for row in range(2, worksheet.max_row + 1):
                     cell = worksheet[f"{col}{row}"]
-                    cell.number_format = '# ##0.00'
+                    cell.number_format = '# ###0.00'
         else:
             empty_df = pd.DataFrame({"Сообщение": ["Нет данных для динамики ФЛ"]})
             empty_df.to_excel(writer, sheet_name="ФЛ_Динамика", index=False)
@@ -255,7 +255,7 @@ def create_excel_report(
             # Сумма
             for row in range(2, worksheet.max_row + 1):
                 cell = worksheet[f"C{row}"]
-                cell.number_format = '# ##0.00'
+                cell.number_format = '# ###0.00'
         else:
             empty_df = pd.DataFrame({"Сообщение": ["Нет данных по операциям ФЛ"]})
             empty_df.to_excel(writer, sheet_name="ФЛ_Операции", index=False)
@@ -284,7 +284,7 @@ def create_excel_report(
                 for col in ['C', 'D']:
                     for row in range(2, worksheet.max_row + 1):
                         cell = worksheet[f"{col}{row}"]
-                        cell.number_format = '# ##0.00'
+                        cell.number_format = '# ###0.00'
             else:
                 empty_df = pd.DataFrame({"Сообщение": ["Нет данных по вкладам ФЛ"]})
                 empty_df.to_excel(writer, sheet_name="ФЛ_Вклады", index=False)
@@ -318,7 +318,7 @@ def create_excel_report(
                 # Сумма
                 for row in range(2, worksheet.max_row + 1):
                     cell = worksheet[f"C{row}"]
-                    cell.number_format = '# ##0.00'
+                    cell.number_format = '# ###0.00'
             else:
                 empty_df = pd.DataFrame({"Сообщение": ["Нет операций по вкладам ФЛ"]})
                 empty_df.to_excel(writer, sheet_name="ФЛ_Вклады_Операции", index=False)
