@@ -25,22 +25,20 @@ class BalanceReport:
         }
 
 
-# ============================================
-# НОВАЯ МОДЕЛЬ ДЛЯ ФЛ
-# ============================================
-
 @dataclass
 class BalanceReportFL:
     """Результат расчета остатков для физлица"""
     start_balance: float
     end_balance: float
     monthly_dynamics: pd.DataFrame
-    deposits: pd.DataFrame  # пока пустой, для будущего отчета по вкладам
+    deposits_data: list  # список словарей с данными по вкладам
+    deposits_on_end: float  # сумма остатков на вкладах на конец периода
     
     def to_dict(self):
         return {
             "start_balance": self.start_balance,
             "end_balance": self.end_balance,
             "monthly_dynamics": self.monthly_dynamics,
-            "deposits": self.deposits
+            "deposits_data": self.deposits_data,
+            "deposits_on_end": self.deposits_on_end
         }
