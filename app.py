@@ -65,18 +65,28 @@ if st.button("🔄 Обработать файлы", type="primary"):
             with st.spinner("Обработка файлов..."):
                 fl_error = False
                 
+                # ============================================
                 # Обработка ИП
+                # ============================================
                 if file_ip:
                     st.session_state.ip_operations = IPParser.parse(file_ip)
                     if not st.session_state.ip_operations.empty:
                         duplicates_ip = DataValidator.find_duplicates(st.session_state.ip_operations)
                         if not duplicates_ip.empty:
                             st.warning(f"⚠️ Обнаружены дублирующиеся операции в ИП: {len(duplicates_ip)} шт.")
+                            with st.expander("📋 Показать дубликаты (ИП)"):
+                                st.dataframe(
+                                    duplicates_ip[["date", "amount", "description"]],
+                                    use_container_width=True,
+                                    hide_index=True
+                                )
                         DataValidator.validate_amounts(st.session_state.ip_operations)
                 else:
                     st.session_state.ip_operations = pd.DataFrame()
                 
+                # ============================================
                 # Обработка ФЛ
+                # ============================================
                 if file_fl:
                     try:
                         st.session_state.fl_operations = FLParser.parse(file_fl)
@@ -84,6 +94,12 @@ if st.button("🔄 Обработать файлы", type="primary"):
                             duplicates_fl = DataValidator.find_duplicates(st.session_state.fl_operations)
                             if not duplicates_fl.empty:
                                 st.warning(f"⚠️ Обнаружены дублирующиеся операции в ФЛ: {len(duplicates_fl)} шт.")
+                                with st.expander("📋 Показать дубликаты (ФЛ)"):
+                                    st.dataframe(
+                                        duplicates_fl[["date", "amount", "description"]],
+                                        use_container_width=True,
+                                        hide_index=True
+                                    )
                             DataValidator.validate_amounts(st.session_state.fl_operations)
                     except ParserError as e:
                         st.warning(f"⚠️ {str(e)}")
@@ -96,6 +112,33 @@ if st.button("🔄 Обработать файлы", type="primary"):
                 st.session_state.report_ready = False
                 
                 st.success("✅ Файлы успешно обработаны!")
+                
+                # ============================================
+                # Статистика
+                # ============================================
+                col1, col2 = st.columns(2)
+                with col1:
+                    count_ip = len(st.session_state.ip_operations) if not st.session_state.ip_operations.empty else 0
+                    st.metric("📊 Операций ИП", count_ip)
+                with col2:
+                    count_fl = len(st.session_state.fl_operations) if not st.session_state.fl_operations.empty else 0
+                    st.metric("📊 Операций ФЛ", count_fl)
+                
+                if fl_error:
+                    st.info("ℹ️ Расчет ФЛ не будет произведен из-за отсутствия колонок.")
+                
+        except ParserError as e:
+            st.error(f"❌ Ошибка при обработке: {str(e)}")
+            st.session_state.data_loaded = False
+        except ValueError as e:
+            st.error(f"❌ Ошибка валидации: {str(e)}")
+            st.session_state.data_loaded = False
+        except Exception as e:
+            st.error(f"❌ Непредвиденная ошибка: {str(e)}")
+            st.session_state.data_loaded = False
+    else:
+        st.warning("⚠️ Загрузите хотя бы один файл для обработки")
+        
                 
                 # Статистика
                 col1, col2 = st.columns(2)
