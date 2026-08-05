@@ -220,11 +220,22 @@ class BalanceCalculatorFL:
         dynamics_df = pd.DataFrame(dynamics)
         
         # Конечный остаток
+        # Сумма остатков на вкладах на конец периода
+        deposits_on_end = 0.0
+        for deposit_item in deposits_data:
+            last_row = deposit_item["data"].iloc[-1] if not deposit_item["data"].empty else None
+            if last_row is not None:
+                deposits_on_end += last_row["balance"]
+        
+        # Остаток на Текущем счете на конец периода
         main_period = main_ops[
             (main_ops["date"] >= pd.Timestamp(start_date)) & 
             (main_ops["date"] <= pd.Timestamp(end_date))
         ]
-        end_balance = start_balance + (main_period["amount"].sum() if not main_period.empty else 0.0)
+        main_end_balance = start_balance + (main_period["amount"].sum() if not main_period.empty else 0.0)
+        
+        # Итоговый конечный остаток = текущий счет + все вклады
+        end_balance = main_end_balance + deposits_on_end
         
         # ============================================
         # 5. РАСЧЕТ ПО ВКЛАДАМ
