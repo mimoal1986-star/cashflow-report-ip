@@ -1,10 +1,10 @@
 import pandas as pd
 from datetime import datetime
 from typing import Dict
-from models import BalanceReport
+from models import BalanceReport, BalanceReportFL
 
 class BalanceCalculator:
-    """Калькулятор остатков"""
+    """Калькулятор остатков для ИП"""
     
     @staticmethod
     def calculate(
@@ -12,38 +12,22 @@ class BalanceCalculator:
         start_date: datetime,
         end_date: datetime
     ) -> Dict[str, BalanceReport]:
-        """
-        Рассчитывает остатки для ИП
-        """
         if ip_operations.empty:
             raise ValueError("Нет данных для расчета")
         
         ip_ops = ip_operations.copy()
         
-        # ============================================
-        # 1. НАЧАЛЬНЫЙ ОСТАТОК
-        # ============================================
         start_month = start_date.replace(day=1)
-        
         ip_before = ip_ops[ip_ops["date"] < start_month]
         start_balance_ip = ip_before["amount"].sum() if not ip_before.empty else 0.0
         
-        # ============================================
-        # 2. ОПЕРАЦИИ ЗА ПЕРИОД
-        # ============================================
         ip_period = ip_ops[
             (ip_ops["date"] >= start_date) & 
             (ip_ops["date"] <= end_date)
         ]
         
-        # ============================================
-        # 3. КОНЕЧНЫЙ ОСТАТОК
-        # ============================================
         end_balance_ip = start_balance_ip + (ip_period["amount"].sum() if not ip_period.empty else 0.0)
         
-        # ============================================
-        # 4. ПОМЕСЯЧНАЯ ДИНАМИКА
-        # ============================================
         dynamics = BalanceCalculator._calculate_monthly_dynamics(
             ip_ops, start_date, end_date, start_balance_ip
         )
@@ -59,8 +43,6 @@ class BalanceCalculator:
         end_date: datetime,
         start_balance_ip: float
     ) -> pd.DataFrame:
-        """Рассчитывает помесячную динамику остатков"""
-        
         start_month = start_date.replace(day=1)
         months = pd.date_range(start=start_month, end=end_date, freq="MS")
         
@@ -86,3 +68,31 @@ class BalanceCalculator:
             })
         
         return pd.DataFrame(dynamics)
+
+
+# ============================================
+# НОВЫЙ КАЛЬКУЛЯТОР ДЛЯ ФЛ
+# ============================================
+
+class BalanceCalculatorFL:
+    """Калькулятор остатков для физлица"""
+    
+    @staticmethod
+    def calculate(
+        fl_operations: pd.DataFrame,
+        start_date: datetime,
+        end_date: datetime
+    ) -> BalanceReportFL:
+        """
+        Рассчитывает остатки для физлица.
+        Пока возвращает пустой отчет.
+        """
+        if fl_operations.empty:
+            return BalanceReportFL(0.0, 0.0, pd.DataFrame(), pd.DataFrame())
+        
+        # ============================================
+        # ВРЕМЕННО: возвращаем пустой отчет
+        # TODO: реализовать расчет
+        # ============================================
+        
+        return BalanceReportFL(0.0, 0.0, pd.DataFrame(), pd.DataFrame())
