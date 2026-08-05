@@ -113,44 +113,19 @@ if st.button("🔄 Обработать файлы", type="primary"):
                 
                 st.success("✅ Файлы успешно обработаны!")
                 
-                # ============================================
-                # Статистика
-                # ============================================
-                col1, col2 = st.columns(2)
-                with col1:
-                    count_ip = len(st.session_state.ip_operations) if not st.session_state.ip_operations.empty else 0
-                    st.metric("📊 Операций ИП", count_ip)
-                with col2:
-                    count_fl = len(st.session_state.fl_operations) if not st.session_state.fl_operations.empty else 0
-                    st.metric("📊 Операций ФЛ", count_fl)
-                
-                if fl_error:
-                    st.info("ℹ️ Расчет ФЛ не будет произведен из-за отсутствия колонок.")
-                
-        except ParserError as e:
-            st.error(f"❌ Ошибка при обработке: {str(e)}")
-            st.session_state.data_loaded = False
-        except ValueError as e:
-            st.error(f"❌ Ошибка валидации: {str(e)}")
-            st.session_state.data_loaded = False
-        except Exception as e:
-            st.error(f"❌ Непредвиденная ошибка: {str(e)}")
-            st.session_state.data_loaded = False
-    else:
-        st.warning("⚠️ Загрузите хотя бы один файл для обработки")
-        
-                
-                # Статистика
-                col1, col2 = st.columns(2)
-                with col1:
-                    count_ip = len(st.session_state.ip_operations) if not st.session_state.ip_operations.empty else 0
-                    st.metric("📊 Операций ИП", count_ip)
-                with col2:
-                    count_fl = len(st.session_state.fl_operations) if not st.session_state.fl_operations.empty else 0
-                    st.metric("📊 Операций ФЛ", count_fl)
-                
-                if fl_error:
-                    st.info("ℹ️ Расчет ФЛ не будет произведен из-за отсутствия колонок.")
+            # ============================================
+            # СТАТИСТИКА (вне with spinner)
+            # ============================================
+            col1, col2 = st.columns(2)
+            with col1:
+                count_ip = len(st.session_state.ip_operations) if not st.session_state.ip_operations.empty else 0
+                st.metric("📊 Операций ИП", count_ip)
+            with col2:
+                count_fl = len(st.session_state.fl_operations) if not st.session_state.fl_operations.empty else 0
+                st.metric("📊 Операций ФЛ", count_fl)
+            
+            if fl_error:
+                st.info("ℹ️ Расчет ФЛ не будет произведен из-за отсутствия колонок.")
                 
         except ParserError as e:
             st.error(f"❌ Ошибка при обработке: {str(e)}")
