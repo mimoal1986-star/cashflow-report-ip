@@ -189,6 +189,7 @@ if st.session_state.data_loaded:
             key="end_date"
         )
     
+
     # ============================================
     # КНОПКА РАСЧЕТА
     # ============================================
@@ -208,13 +209,17 @@ if st.session_state.data_loaded:
                 else:
                     st.session_state.ip_report = None
                 
-                # Расчет ФЛ
-                if has_fl and not fl_error:
-                    st.session_state.fl_report = BalanceCalculatorFL.calculate(
-                        st.session_state.fl_operations,
-                        pd.Timestamp(start_date),
-                        pd.Timestamp(end_date)
-                    )
+                # Расчет ФЛ (проверяем, что нет ошибки)
+                if has_fl:
+                    # Проверяем, что fl_operations не пустой и нет ошибки
+                    if not st.session_state.fl_operations.empty:
+                        st.session_state.fl_report = BalanceCalculatorFL.calculate(
+                            st.session_state.fl_operations,
+                            pd.Timestamp(start_date),
+                            pd.Timestamp(end_date)
+                        )
+                    else:
+                        st.session_state.fl_report = None
                 else:
                     st.session_state.fl_report = None
                 
