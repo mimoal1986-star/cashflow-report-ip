@@ -8,24 +8,43 @@ from deposit_report import DepositReportGenerator
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ФОРМАТИРОВАНИЯ
 # ============================================
 
-def format_number(value: float) -> str:
+def format_number(value: float, with_sign: bool = False) -> str:
     """
     Форматирует число в формат: 50584212,94
-    (без разделителей тысяч, запятая как разделитель)
+    Если with_sign=True: +50584212,94 или -50584212,94
     """
     if pd.isna(value) or value == 0:
         return ""
-    return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    if with_sign:
+        return f"{value:+.2f}".replace(".", ",")
+    return f"{value:.2f}".replace(".", ",")
 
 def excel_date(date_val) -> int:
     """
-    Преобразует дату в числовой формат Excel (количество дней с 01.01.1900)
+    Преобразует дату в числовой формат Excel.
+    Поддерживает: строки "31.07.2026", datetime-объекты, Timestamp.
     """
-    if pd.isna(date_val):
-        return ""
-    # Excel считает даты с 01.01.1900 = 1
-    # toordinal(): 01.01.0001 = 1, поэтому сдвиг на 693594 дня до 01.01.1900
-    return date_val.toordinal() + 693594
+    if pd.isna(date_val) or date_val == "":
+        return None
+    
+    # Если уже datetime
+    if isinstance(date_val, (pd.Timestamp, datetime)):
+        return (date_val - pd.Timestamp("1899-12-30")).days
+    
+    # Если строка
+    if isinstance(date_val, str):
+        date_val = date_val.strip()
+        try:
+            dt = pd.to_datetime(date_val, format="%d.%m.%Y", errors="coerce")
+            if pd.isna(dt):
+                dt = pd.to_datetime(date_val, errors="coerce")
+            if pd.isna(dt):
+                return None
+            return (dt - pd.Timestamp("1899-12-30")).days
+        except:
+            return None
+    
+    return None
 
 # ============================================
 # ЭКСПОРТ В EXCEL
@@ -71,12 +90,10 @@ def create_excel_report(
         if ip_operations is not None and not ip_operations.empty:
             ops_df = ip_operations.copy()
             
-            ops_df["Дата"] = pd.to_datetime(ops_df["date"]).apply(excel_date)
+            ops_df["Дата"] = ops_df["date"].apply(excel_date)
             ops_df["Дебет"] = ops_df["debit"].apply(lambda x: format_number(x) if x != 0 else "")
             ops_df["Кредит"] = ops_df["credit"].apply(lambda x: format_number(x) if x != 0 else "")
-            ops_df["Итого"] = ops_df["amount"].apply(
-                lambda x: f"{x:+,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            )
+            ops_df["Итого"] = ops_df["amount"].apply(lambda x: format_number(x, with_sign=True))
             ops_df["Описание"] = ops_df["description"]
             
             result_ops = ops_df[["Дата", "Дебет", "Кредит", "Итого", "Описание"]].copy()
@@ -95,14 +112,14 @@ def create_excel_report(
                     deposit_report_copy = deposit_report.copy()
                     
                     if "Дата начала" in deposit_report_copy.columns:
-                        deposit_report_copy["Дата начала"] = pd.to_datetime(
-                            deposit_report_copy["Дата начала"], errors="coerce"
-                        ).apply(lambda x: excel_date(x) if pd.notna(x) else "")
+                        deposit_report_copy["Дата начала"] = deposit_report_copy["Дата начала"].apply(
+                            lambda x: excel_date(x) if pd.notna(x) else ""
+                        )
                     
                     if "Дата завершения" in deposit_report_copy.columns:
-                        deposit_report_copy["Дата завершения"] = pd.to_datetime(
-                            deposit_report_copy["Дата завершения"], errors="coerce"
-                        ).apply(lambda x: excel_date(x) if pd.notna(x) else "")
+                        deposit_report_copy["Дата завершения"] = deposit_report_copy["Дата завершения"].apply(
+                            lambda x: excel_date(x) if pd.notna(x) else ""
+                        )
                     
                     deposit_report_copy["Сумма депозита (руб)"] = deposit_report_copy["Сумма депозита (руб)"].apply(format_number)
                     deposit_report_copy["Процент депозита (руб)"] = deposit_report_copy["Процент депозита (руб)"].apply(format_number)
@@ -120,7 +137,7 @@ def create_excel_report(
                 
                 from deposit_report import DepositReportGenerator as DRG
                 detail_df["Номер сделки"] = detail_df["description"].apply(DRG.extract_deal_number)
-                detail_df["Дата"] = pd.to_datetime(detail_df["date"]).apply(excel_date)
+                detail_df["Дата"] = detail_df["date"].apply(excel_date)
                 detail_df["Сумма"] = detail_df["amount"].apply(format_number)
                 detail_df["Назначение платежа"] = detail_df["description"]
                 
@@ -162,7 +179,7 @@ def create_excel_report(
         if fl_operations is not None and not fl_operations.empty:
             fl_ops = fl_operations.copy()
             
-            fl_ops["Дата"] = pd.to_datetime(fl_ops["date"]).apply(excel_date)
+            fl_ops["Дата"] = fl_ops["date"].apply(excel_date)
             fl_ops["Описание"] = fl_ops["description"]
             fl_ops["Сумма"] = fl_ops["amount"].apply(format_number)
             fl_ops["Счет"] = fl_ops["account_name"] if "account_name" in fl_ops.columns else ""
@@ -211,7 +228,7 @@ def create_excel_report(
             fl_deposit_ops = fl_operations[fl_operations["account_name"].isin(deposit_names)].copy()
             
             if not fl_deposit_ops.empty:
-                fl_deposit_ops["Дата"] = pd.to_datetime(fl_deposit_ops["date"]).apply(excel_date)
+                fl_deposit_ops["Дата"] = fl_deposit_ops["date"].apply(excel_date)
                 fl_deposit_ops["Описание"] = fl_deposit_ops["description"]
                 fl_deposit_ops["Сумма"] = fl_deposit_ops["amount"].apply(format_number)
                 fl_deposit_ops["Счет"] = fl_deposit_ops["account_name"]
