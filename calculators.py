@@ -179,23 +179,26 @@ class BalanceCalculatorFL:
                 df_calc.loc[pair["to_index"], "description"] = f"Перевод с {pair['from_account']}"
         
         # ============================================
-        # 4. РАСЧЕТ ДИНАМИКИ ПО ТЕКУЩЕМУ СЧЕТУ
+        # 4. РАСЧЕТ ДИНАМИКИ ПО ВСЕМ СЧЕТАМ (Текущий + Вклады)
         # ============================================
         
-        # Берем только операции по Текущему счету
-        main_ops = df_calc[df_calc["account_name"] == BalanceCalculatorFL.MAIN_ACCOUNT].copy()
+        # Берем все операции (Текущий счет + Вклады)
+        all_ops = df_calc[
+            (df_calc["account_name"] == BalanceCalculatorFL.MAIN_ACCOUNT) |
+            (df_calc["account_name"].isin(BalanceCalculatorFL.DEPOSIT_ACCOUNTS))
+        ].copy()
         
-        if main_ops.empty:
+        if all_ops.empty:
             return BalanceReportFL(0.0, 0.0, pd.DataFrame(), [], 0.0)
         
         # Сортируем по дате
-        main_ops = main_ops.sort_values("date").reset_index(drop=True)
+        all_ops = all_ops.sort_values("date").reset_index(drop=True)
         
-        # Начальный остаток = сумма всех операций до start_date
-        main_before = main_ops[main_ops["date"] < pd.Timestamp(start_date)]
-        start_balance = main_before["amount"].sum() if not main_before.empty else 0.0
+        # Начальный остаток = сумма всех операций по всем счетам до start_date
+        all_before = all_ops[all_ops["date"] < pd.Timestamp(start_date)]
+        start_balance = all_before["amount"].sum() if not all_before.empty else 0.0
         
-        # Помесячная динамика
+        # Помесячная динамика по всем счетам
         start_month = start_date.replace(day=1)
         months = pd.date_range(start=start_month, end=end_date, freq="MS")
         
@@ -205,9 +208,9 @@ class BalanceCalculatorFL:
         for month_start in months:
             month_end = month_start + pd.offsets.MonthEnd(1)
             
-            month_ops = main_ops[
-                (main_ops["date"] >= month_start) & 
-                (main_ops["date"] <= min(month_end, end_date))
+            month_ops = all_ops[
+                (all_ops["date"] >= month_start) & 
+                (all_ops["date"] <= min(month_end, end_date))
             ]
             
             current_balance += month_ops["amount"].sum() if not month_ops.empty else 0.0
@@ -220,7 +223,7 @@ class BalanceCalculatorFL:
         dynamics_df = pd.DataFrame(dynamics)
         
         # ============================================
-        # 5. РАСЧЕТ ПО ВКЛАДАМ
+        # 5. РАСЧЕТ ПО ВКЛАДАМ (для отдельного отчета)
         # ============================================
         
         deposits_data = []
@@ -278,22 +281,15 @@ class BalanceCalculatorFL:
         # 6. КОНЕЧНЫЙ ОСТАТОК ФЛ = СУММА ВСЕХ СЧЕТОВ
         # ============================================
         
-        # Сумма остатков на вкладах на конец периода
+        # Конечный остаток = текущий остаток из динамики (уже включает все счета)
+        end_balance = current_balance
+        
+        # Сумма остатков на вкладах на конец периода (для метрики "Из них на вкладе")
         deposits_on_end = 0.0
         for deposit_item in deposits_data:
             last_row = deposit_item["data"].iloc[-1] if not deposit_item["data"].empty else None
             if last_row is not None:
                 deposits_on_end += last_row["balance"]
-        
-        # Остаток на Текущем счете на конец периода
-        main_period = main_ops[
-            (main_ops["date"] >= pd.Timestamp(start_date)) & 
-            (main_ops["date"] <= pd.Timestamp(end_date))
-        ]
-        main_end_balance = start_balance + (main_period["amount"].sum() if not main_period.empty else 0.0)
-        
-        # Итоговый конечный остаток = текущий счет + все вклады
-        end_balance = main_end_balance + deposits_on_end
         
         return BalanceReportFL(
             start_balance=start_balance,
